@@ -170,12 +170,13 @@ class TestDeleteCategory(CategoryTestBase):
         self.assertNotIn("医疗", names)
 
     def test_delete_referenced_migrates_to_fallback(self):
-        """F 方案②新契约：删除被引用分类时，历史记录自动迁移到兜底「其他支出」"""
+        """F 方案②契约（29dcdd7 起）：兜底分类改为「其他」（支出）/「其他收入」（收入），
+        删除被引用分类时历史记录自动迁移到同类型兜底"""
         self.seed_defaults()
         self.seed_record("饮食", rid=1)
         category.delete_category("饮食")
         used = [r["category"] for r in category._load_records()]
-        self.assertEqual(used, ["其他支出"])
+        self.assertEqual(used, ["其他"])
         names = [c["name"] for c in category.list_categories()]
         self.assertNotIn("饮食", names)
 
