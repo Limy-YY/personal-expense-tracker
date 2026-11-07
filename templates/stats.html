@@ -1,7 +1,5 @@
 {% extends "base.html" %}
-
 {% block title %}统计{% endblock %}
-
 {% block content %}
 <div class="page-head">
   <div>
@@ -10,7 +8,6 @@
   </div>
   <a class="btn btn-ghost" href="{{ url_for('stats') }}">重置统计</a>
 </div>
-
 <form class="filter-bar card" method="get" action="{{ url_for('stats') }}">
   <div class="filter-grid">
     <label>类型
@@ -20,7 +17,6 @@
         <option value="income" {{ 'selected' if filters.get('type') == 'income' }}>收入</option>
       </select>
     </label>
-
     <label>类别
       <select name="category">
         <option value="">全部</option>
@@ -29,26 +25,21 @@
         {% endfor %}
       </select>
     </label>
-
     <label>开始日期
       <input type="date" name="start" value="{{ filters.get('start', '') }}">
     </label>
-
     <label>结束日期
       <input type="date" name="end" value="{{ filters.get('end', '') }}">
     </label>
-
     <label class="filter-keyword">关键字
       <input type="search" name="q" value="{{ filters.get('q', '') }}" placeholder="备注或类别">
     </label>
-
     <div class="filter-actions">
       <button class="btn btn-primary" type="submit">统计</button>
       <a class="btn btn-ghost" href="{{ url_for('stats') }}">重置</a>
     </div>
   </div>
 </form>
-
 <section class="stats-grid">
   <article class="stat-card stat-income">
     <span class="stat-label">总收入</span>
@@ -66,12 +57,13 @@
   </article>
 </section>
 
+{% include "partials/charts.html" %}
+
 <section class="card">
   <div class="card-head">
     <h2>分类明细</h2>
     <span class="muted small">占比按同类型总额计算</span>
   </div>
-
   {% if category_rows %}
     <div class="table-wrap">
       <table class="table">
@@ -107,3 +99,4 @@
   {% endif %}
 </section>
 {% endblock %}
+
