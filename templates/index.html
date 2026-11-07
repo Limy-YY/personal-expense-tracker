@@ -1,98 +1,115 @@
 {% extends "base.html" %}
-
-{% block title %}首页{% endblock %}
+{% block title %}记一笔{% endblock %}
 
 {% block content %}
-<div class="page-head">
-  <div>
-    <h1>收支概览</h1>
-    <p class="page-sub">共 {{ total }} 笔记录，最近一笔收支一目了然。</p>
+<section class="overview" aria-label="本月概览">
+  <div class="overview-top">
+    <h1 class="page-title">本月概览</h1>
+    <span class="mono muted">{{ summary.month_label }}</span>
   </div>
-  <a class="btn btn-primary" href="{{ url_for('record_new') }}">记一笔</a>
-</div>
-
-<section class="stats-grid">
-  <article class="stat-card stat-income">
-    <span class="stat-label">总收入</span>
-    <strong class="stat-value">¥{{ summary.income | money }}</strong>
-  </article>
-  <article class="stat-card stat-expense">
-    <span class="stat-label">总支出</span>
-    <strong class="stat-value">¥{{ summary.expense | money }}</strong>
-  </article>
-  <article class="stat-card stat-balance">
-    <span class="stat-label">结余</span>
-    <strong class="stat-value {{ 'text-expense' if summary.balance < 0 }}">
-      {{ '-' if summary.balance < 0 }}¥{{ summary.balance | abs | money }}
-    </strong>
-  </article>
+  <div class="figures">
+    <div class="figure">
+      <span class="fig-label">收入</span>
+      <span class="fig-num income">+{{ '%.2f' | format(summary.income) }}</span>
+      <span class="fig-sub">{{ summary.income_count }} 笔</span>
+    </div>
+    <div class="figure">
+      <span class="fig-label">支出</span>
+      <span class="fig-num expense">−{{ '%.2f' | format(summary.expense) }}</span>
+      <span class="fig-sub">{{ summary.expense_count }} 笔</span>
+    </div>
+    <div class="figure">
+      <span class="fig-label">结余</span>
+      <span class="fig-num {{ 'income' if summary.balance >= 0 else 'expense' }}">{{ '%+.2f' | format(summary.balance) }}</span>
+      <span class="fig-sub">共 {{ summary.total_count }} 笔记录</span>
+    </div>
+  </div>
 </section>
 
-<section class="two-col">
-  <article class="card">
-    <div class="card-head">
+<div class="home-grid">
+  <section class="panel form-panel">
+    <header class="panel-head">
+      <h2>记一笔</h2>
+    </header>
+
+    <form class="entry-form" method="post" action="{{ url_for('record_add') }}" novalidate data-entry-form>
+      <div class="seg" role="radiogroup" aria-label="收支类型">
+        <input type="radio" name="type" id="type-expense" value="expense" checked>
+        <label for="type-expense">支出</label>
+        <input type="radio" name="type" id="type-income" value="income">
+        <label for="type-income">收入</label>
+      </div>
+
+      <div class="field field-amount">
+        <label for="amount">金额</label>
+        <div class="amount-wrap">
+          <span class="currency" aria-hidden="true">¥</span>
+          <input id="amount" name="amount" type="text" inputmode="decimal" autocomplete="off"
+                 placeholder="0.00" value="{{ form.amount if form else '' }}" data-rule="amount">
+        </div>
+        <p class="err" data-err-for="amount" hidden></p>
+      </div>
+
+      <div class="field-row field-row-3">
+        <div class="field">
+          <label for="date">日期</label>
+          <input id="date" name="date" type="date" value="{{ (form.date if form else '') or today }}" data-rule="date">
+          <p class="err" data-err-for="date" hidden></p>
+        </div>
+        <div class="field">
+          <label for="category">类别</label>
+          <select id="category" name="category" data-rule="category" data-category-select>
+            {% for c in categories %}
+              <option value="{{ c.name }}" data-type="{{ c.type }}">{{ c.name }}</option>
+            {% endfor %}
+          </select>
+          <p class="err" data-err-for="category" hidden></p>
+        </div>
+        <div class="field">
+          <label for="account">账户</label>
+          <select id="account" name="account">
+            {% for a in accounts %}
+              <option value="{{ a }}" {{ 'selected' if form and form.account == a else '' }}>{{ a }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="note">备注<span class="optional">可不填</span></label>
+        <input id="note" name="note" type="text" maxlength="40" placeholder="例如：食堂二楼午饭"
+               value="{{ form.note if form else '' }}">
+      </div>
+
+      <button class="btn btn-primary btn-block" type="submit">
+        <span class="btn-label">记上这笔</span>
+      </button>
+    </form>
+  </section>
+
+  <section class="panel list-panel">
+    <header class="panel-head">
       <h2>最近记录</h2>
-      <a class="link" href="{{ '/records' }}">查看全部</a>
-    </div>
+      <a class="link-quiet" href="{{ url_for('record_list') }}">全部明细</a>
+    </header>
 
     {% if recent %}
-      <div class="table-wrap">
-        <table class="table">
-          <thead>
-            <tr>
-              <th>日期</th>
-              <th>类别</th>
-              <th>备注</th>
-              <th class="num">金额</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for record in recent %}
-              <tr>
-                <td>{{ record.date }}</td>
-                <td>
-                  <span class="chip">
-                    <i class="dot" style="background: {{ colors.get(record.category, '#94a3b8') }}"></i>
-                    {{ record.category }}
-                  </span>
-                </td>
-                <td class="muted">{{ record.note or '—' }}</td>
-                <td class="num {{ 'amount-income' if record.type == 'income' else 'amount-expense' }}">
-                  {{ '+' if record.type == 'income' else '-' }}¥{{ record.amount | money }}
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+      <div class="ledger">
+        {% for r in recent %}
+          <div class="ledger-row">
+            <span class="l-date mono">{{ r.date[5:] }}</span>
+            <span class="l-cat"><i class="dot" style="background: {{ r.color }}"></i>{{ r.category }}</span>
+            <span class="l-note"><i class="l-acc">{{ r.account }}</i>{{ r.note or '—' }}</span>
+            <span class="l-amt mono {{ r.type }}">{{ '+' if r.type == 'income' else '−' }}{{ '%.2f' | format(r.amount) }}</span>
+          </div>
+        {% endfor %}
       </div>
     {% else %}
       <div class="empty">
-        <p>还没有记录，先记下第一笔吧。</p>
-        <a class="btn btn-primary" href="{{ url_for('record_new') }}">去记账</a>
+        <p class="empty-title">还没有记录</p>
+        <p class="empty-hint">在上面的表单填一笔，这里就会显示出来。</p>
       </div>
     {% endif %}
-  </article>
-
-  <aside class="card quick-card">
-    <div class="card-head">
-      <h2>快捷入口</h2>
-    </div>
-    <a class="quick-link" href="{{ url_for('record_new') }}">
-      <span>记录一笔收支</span>
-      <small>日期、金额、类别、备注</small>
-    </a>
-    <a class="quick-link" href="{{ '/records' }}">
-      <span>查看明细</span>
-      <small>筛选、编辑与删除记录</small>
-    </a>
-    <a class="quick-link" href="/stats">
-      <span>收支统计</span>
-      <small>按日期、类别汇总并查看图表</small>
-    </a>
-    <a class="quick-link" href="/categories">
-      <span>管理分类</span>
-      <small>新增类别与颜色</small>
-    </a>
-  </aside>
-</section>
+  </section>
+</div>
 {% endblock %}

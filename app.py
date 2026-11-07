@@ -1,74 +1,38 @@
-"""项目入口：负责注册各模块 Blueprint 并启动服务。"""
+"""项目入口：注册各模块 Blueprint 与页面视图，启动服务。"""
 
-from flask import Flask, redirect, render_template, request
+import os
 
-# 各模块均暴露 bp = Blueprint(...)，路由在各自文件内定义，此处仅统一挂载
-from record_add import record_add_bp as record_bp    # 成员C：记账录入
-from record_list import bp as list_bp     # 成员D：记录查看
-from stats import bp as stats_bp, get_stats, money, type_label  # 成员E：统计
-from category import bp as category_bp, init_categories    # 成员F：分类管理
+from flask import Flask
 
-init_categories()   # 确保 data/categories.json 存在（默认分类），否则类别校验全拒（J 补，issue #12）
-from export import bp as export_bp        # 成员A：数据导出
-from query import bp as query_bp          # 成员G：筛选与搜索
+from category import bp as category_bp, init_categories
+from stats import bp as stats_bp, money, type_label
+from export import bp as export_bp
+from query import bp as query_bp
+
+import views
+
+init_categories()  # 确保 data/categories.json 存在（默认分类），否则类别校验全拒
 
 app = Flask(__name__)
-app.secret_key = "ledger-demo-2026"   # flash 消息需要（J 补，issue #12）
+app.secret_key = "ledger-demo-2026"  # flash 消息需要
 
-app.register_blueprint(record_bp)
-app.register_blueprint(list_bp)
-app.register_blueprint(stats_bp)
+# JSON API 蓝图（成员E/F/G/A 的接口，保留供可能的后续前端分离）
 app.register_blueprint(category_bp)
+app.register_blueprint(stats_bp)
 app.register_blueprint(export_bp)
 app.register_blueprint(query_bp)
+
+# 页面视图（成员H 界面 + 成员I 图表）：路由名/变量按 成员H-界面层/接口约定.md
+views.init_app(app)
 
 # 模板过滤器（E 的契约，H/I 的模板使用 money/type_label）
 app.jinja_env.filters["money"] = money
 app.jinja_env.filters["type_label"] = type_label
 
 
-@app.route("/")
-def index():
-    """首页重定向至记录列表页。"""
-    return redirect("/records")
-
-
-@app.route("/stats")
-def stats_page():
-    """统计页（页面视图）：复用 E 的 get_stats，契约字段与 templates/stats.html 对齐。"""
-    args = request.args.to_dict()
-    view = get_stats(
-        date_from=args.get("date_from", ""),
-        date_to=args.get("date_to", ""),
-        category=args.get("category", ""),
-        rtype=args.get("type", ""),
-        amount_min=args.get("amount_min", ""),
-        amount_max=args.get("amount_max", ""),
-        filters=args,
-    )
-    return render_template("stats.html", **view)
-
-
-@app.route("/categories", methods=["GET", "POST"])
-def categories_page():
-    """分类管理页：渲染 H 的 categories.html（F 只提供 API，页面视图由入口补齐）。
-    POST 为表单提交新增类别（J 补，修复添加后 405 不跳转）。"""
-    from category import list_categories, add_category
-    from flask import flash
-    if request.method == "POST":
-        try:
-            add_category(
-                request.form.get("name", "").strip(),
-                request.form.get("type", "expense").strip(),
-                request.form.get("color", "#4f46e5").strip(),
-            )
-            flash("添加成功", "success")
-        except (ValueError, TypeError) as e:
-            flash(f"添加失败：{e}", "error")
-        return redirect("/categories")
-    return render_template("categories.html", categories=list_categories())
-
-
 if __name__ == "__main__":
-    import os
-    app.run(debug=False, host=os.environ.get("HOST", "0.0.0.0"), port=int(os.environ.get("PORT", 5000)))
+    app.run(
+        debug=False,
+        host=os.environ.get("HOST", "0.0.0.0"),
+        port=int(os.environ.get("PORT", 5000)),
+    )

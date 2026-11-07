@@ -1,0 +1,12 @@
+# Python 缓存与编译产物
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 虚拟环境
+.venv/
+venv/
+
+# 系统/编辑器
+.DS_Store
+Thumbs.db

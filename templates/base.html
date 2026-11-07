@@ -1,62 +1,38 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}首页{% endblock %} · 个人记账本</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/layout.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}账簿{% endblock %} · 个人收支记账</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%2316211B'/><path d='M9 8h14M9 16h14M9 24h9' stroke='%23F6F7F4' stroke-width='2.4'/></svg>">
 </head>
 <body>
   <header class="topbar">
-    <div class="topbar-inner">
-      <a class="brand" href="/">
-        <span class="brand-mark">账</span>
-        <span class="brand-text">个人记账本</span>
+    <div class="wrap topbar-in">
+      <a class="brand" href="{{ url_for('index') }}">
+        <span class="stamp">账</span>
+        <span class="brand-text"><strong>账簿</strong><em>个人收支记账</em></span>
       </a>
-
-      <button class="nav-toggle" type="button" data-nav-toggle aria-label="展开导航" aria-expanded="false">
-        <span></span><span></span><span></span>
-      </button>
-
-      <nav class="nav" data-nav>
-        <a class="nav-link {{ 'active' if active == 'index' }}" href="/">首页</a>
-        <a class="nav-link {{ 'active' if active == 'new' }}" href="/add">记一笔</a>
-        <a class="nav-link {{ 'active' if active == 'records' }}" href="/records">明细</a>
-        <a class="nav-link {{ 'active' if active == 'stats' }}" href="/stats">统计</a>
-        <a class="nav-link {{ 'active' if active == 'categories' }}" href="/categories">分类</a>
+      <nav class="nav" aria-label="主导航">
+        <a href="{{ url_for('index') }}" class="{{ 'is-on' if active == 'index' else '' }}">记账</a>
+        <a href="{{ url_for('record_list') }}" class="{{ 'is-on' if active == 'list' else '' }}">明细</a>
+        <a href="{{ url_for('stats') }}" class="{{ 'is-on' if active == 'stats' else '' }}">统计</a>
+        <a href="{{ url_for('categories') }}" class="{{ 'is-on' if active == 'categories' else '' }}">分类</a>
       </nav>
     </div>
   </header>
 
-  <main class="page">
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        <div class="flash-stack" aria-live="polite">
-          {% for category, message in messages %}
-            <div class="flash flash-{{ category }}" role="status">
-              <span>{{ message }}</span>
-              <button type="button" class="flash-close" data-dismiss aria-label="关闭">&times;</button>
-            </div>
-          {% endfor %}
-        </div>
-      {% endif %}
-    {% endwith %}
-
+  <main class="wrap main">
     {% block content %}{% endblock %}
   </main>
 
-  <div class="modal-backdrop" id="confirm-modal" hidden>
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
-      <h3 id="confirm-title">确认删除</h3>
-      <p id="confirm-message">确定要删除吗？该操作不可撤销。</p>
-      <div class="modal-actions">
-        <button type="button" class="btn btn-ghost" data-modal-cancel>取消</button>
-        <button type="button" class="btn btn-danger" data-modal-confirm>确认删除</button>
-      </div>
-    </div>
-  </div>
+  {% with msgs = get_flashed_messages(with_categories=true) %}
+    {% if msgs %}
+      <div id="flash-data" hidden>{{ msgs | tojson }}</div>
+    {% endif %}
+  {% endwith %}
+  <div class="toast-stack" id="toastStack" role="status" aria-live="polite"></div>
 
   <script src="{{ url_for('static', filename='js/ui.js') }}"></script>
   {% block scripts %}{% endblock %}

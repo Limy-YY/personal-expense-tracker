@@ -1,11 +1,10 @@
-
 [
   {
     "id": "sample001",
     "type": "expense",
     "date": "2026-11-03",
     "amount": 18.5,
-    "category": "餐饮",
+    "category": "饮食",
     "note": "学校食堂午餐",
     "account": "微信"
   },
@@ -37,12 +36,21 @@
     "account": "支付宝"
   },
   {
-    "id": "sample005",
-    "type": "income",
     "date": "2026-11-07",
-    "amount": 200.0,
-    "category": "其他",
-    "note": "生活费",
-    "account": "微信"
+    "type": "expense",
+    "category": "饮食",
+    "amount": 20.0,
+    "note": "中药费用",
+    "account": "微信",
+    "id": "e772aa5ac7824b968e5e821c9db32e93"
+  },
+  {
+    "date": "2026-11-07",
+    "type": "income",
+    "category": "工资",
+    "amount": 30.0,
+    "note": "午饭",
+    "account": "微信",
+    "id": "96742a9e5ab54ad8af8d8be4bd56684f"
   }
 ]

@@ -1,36 +1,186 @@
-{% extends "base.html" %} {% block content %}
-收支统计
-按日期、类别、金额区间查看收入、支出与结余
+{% extends "base.html" %}
+{% block title %}统计{% endblock %}
 
-{# ===== 筛选表单：GET 提交到 /stats；filters 由后端回传（request.args） ===== #}
+{% block content %}
+<section class="overview">
+  <div class="overview-top">
+    <h1 class="page-title">统计</h1>
+    <span class="mono muted">{{ summary.range_label }}</span>
+  </div>
+  <div class="figures">
+    <div class="figure">
+      <span class="fig-label">收入</span>
+      <span class="fig-num income">+{{ '%.2f' | format(summary.income) }}</span>
+      <span class="fig-sub">{{ summary.income_count }} 笔</span>
+    </div>
+    <div class="figure">
+      <span class="fig-label">支出</span>
+      <span class="fig-num expense">−{{ '%.2f' | format(summary.expense) }}</span>
+      <span class="fig-sub">{{ summary.expense_count }} 笔</span>
+    </div>
+    <div class="figure">
+      <span class="fig-label">结余</span>
+      <span class="fig-num {{ 'income' if summary.balance >= 0 else 'expense' }}">{{ '%+.2f' | format(summary.balance) }}</span>
+      <span class="fig-sub">{{ summary.total_count }} 笔合计</span>
+    </div>
+  </div>
+</section>
 
- 年 /月/日
- 
- 年 /月/日
- 
-全部类别
- 
-全部类型
- 
-最小金额
- 
-最大金额
-查询
-{# ===== 汇总卡片：summary = {income, expense, balance} ===== #}
-总收入
-¥{{ summary.income | money }}
-总支出
-¥{{ summary.expense | money }}
-结余
-¥{{ summary.balance | money }}
-笔数
-{{ total }} 笔
-{# ===== 图表容器：图表由成员I 的 partials/charts.html 绘制 ===== #}
-{{ chart_category_type | type_label }}分类占比
-月度收支趋势
-{# ===== 分类明细：category_rows = {name, color, amount, count, percent} ===== #}
-{% for row in category_rows %} {% else %} {% endfor %}
-类别	金额	笔数	占比
-{{ row.name }}	¥{{ row.amount | money }}	{{ row.count }}	{{ row.percent }}%
-暂无符合条件的记录
-{% endblock %} {% block scripts %} {# ===== 注入图表数据：chart_data = {records, categories}；类型 chart_category_type ===== #} {% include "partials/charts.html" %} {% endblock %}
+<form class="panel filter-bar" method="get" action="{{ url_for('stats') }}">
+  <div class="presets" role="group" aria-label="快捷时间范围">
+    {% for p in presets %}
+      <a class="chip {{ 'is-on' if p.on else '' }}"
+         href="{{ url_for('stats', start=p.start, end=p.end, category=filters.category, type=filters.type) }}">{{ p.label }}</a>
+    {% endfor %}
+  </div>
+  <div class="filter-grid">
+    <div class="field">
+      <label for="s-start">起始日期</label>
+      <input id="s-start" name="start" type="date" value="{{ filters.start }}">
+    </div>
+    <div class="field">
+      <label for="s-end">结束日期</label>
+      <input id="s-end" name="end" type="date" value="{{ filters.end }}">
+    </div>
+    <div class="field">
+      <label for="s-type">类型</label>
+      <select id="s-type" name="type">
+        <option value="" {{ 'selected' if not filters.type else '' }}>收入 + 支出</option>
+        <option value="expense" {{ 'selected' if filters.type == 'expense' else '' }}>只看支出</option>
+        <option value="income" {{ 'selected' if filters.type == 'income' else '' }}>只看收入</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="s-cat">类别</label>
+      <select id="s-cat" name="category">
+        <option value="" {{ 'selected' if not filters.category else '' }}>全部类别</option>
+        {% for c in categories %}
+          <option value="{{ c.name }}" {{ 'selected' if filters.category == c.name else '' }}>{{ c.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="filter-actions">
+      <button class="btn btn-primary" type="submit">统计</button>
+      <a class="btn btn-ghost" href="{{ url_for('stats') }}">重置</a>
+    </div>
+  </div>
+</form>
+
+{% if not summary.total_count %}
+  <section class="panel">
+    <div class="empty">
+      <p class="empty-title">这段时间没有记录</p>
+      <p class="empty-hint">把日期范围放宽一些，或者先去记几笔。</p>
+      <a class="btn btn-ghost" href="{{ url_for('index') }}">去记账</a>
+    </div>
+  </section>
+{% else %}
+  <div class="stat-grid">
+    <section class="panel" id="chart-cat">
+      <header class="panel-head">
+        <h2>支出构成</h2>
+      </header>
+      <div class="chart-body">
+        <ul class="bar-list">
+          {% for c in by_category if c.type == 'expense' %}
+            <li class="bar-item">
+              <div class="bar-label">
+                <span class="l-cat"><i class="dot" style="background: {{ c.color }}"></i>{{ c.name }}</span>
+                <span class="mono expense">{{ '%.2f' | format(c.amount) }}</span>
+              </div>
+              <div class="bar-track" role="img" aria-label="{{ c.name }} 占比 {{ (c.ratio * 100) | round(1) }}%">
+                <span class="bar-fill" style="width: {{ (c.ratio * 100) | round(1) }}%; background: {{ c.color }}"></span>
+              </div>
+              <div class="bar-meta">
+                <span class="muted">{{ c.count }} 笔</span>
+                <span class="mono muted">{{ (c.ratio * 100) | round(1) }}%</span>
+              </div>
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </section>
+
+    <section class="panel" id="chart-bar">
+      <header class="panel-head">
+        <h2>收入构成</h2>
+      </header>
+      <div class="chart-body">
+        <ul class="bar-list">
+          {% for c in by_category if c.type == 'income' %}
+            <li class="bar-item">
+              <div class="bar-label">
+                <span class="l-cat"><i class="dot" style="background: {{ c.color }}"></i>{{ c.name }}</span>
+                <span class="mono income">{{ '%.2f' | format(c.amount) }}</span>
+              </div>
+              <div class="bar-track" role="img" aria-label="{{ c.name }} 占比 {{ (c.ratio * 100) | round(1) }}%">
+                <span class="bar-fill" style="width: {{ (c.ratio * 100) | round(1) }}%; background: {{ c.color }}"></span>
+              </div>
+              <div class="bar-meta">
+                <span class="muted">{{ c.count }} 笔</span>
+                <span class="mono muted">{{ (c.ratio * 100) | round(1) }}%</span>
+              </div>
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </section>
+
+    <section class="panel" id="chart-month">
+      <header class="panel-head">
+        <h2>月度趋势</h2>
+      </header>
+      <div class="chart-body">
+        {% set maxv = (by_month | map(attribute='expense') | max) or 1 %}
+        {% set maxi = (by_month | map(attribute='income') | max) or 0 %}
+        {% set denom = maxi if maxi > maxv else maxv %}
+        <div class="col-chart">
+          {% for m in by_month %}
+            <div class="col-group">
+              <div class="col-bars">
+                <span class="col-bar income" style="height: {{ ((m.income / denom) * 110) | round(0) | int }}px"
+                      title="收入 {{ '%.2f' | format(m.income) }}"></span>
+                <span class="col-bar expense" style="height: {{ ((m.expense / denom) * 110) | round(0) | int }}px"
+                      title="支出 {{ '%.2f' | format(m.expense) }}"></span>
+              </div>
+              <span class="col-label mono">{{ m.month }}</span>
+            </div>
+          {% endfor %}
+        </div>
+        <div class="legend">
+          <span><i class="dot income"></i>收入</span>
+          <span><i class="dot expense"></i>支出</span>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <section class="panel">
+    <header class="panel-head">
+      <h2>类别明细</h2>
+    </header>
+    <div class="ledger ledger-full">
+      <div class="ledger-head ledger-head-stat" aria-hidden="true">
+        <span>类别</span><span>笔数</span><span class="ta-r">金额</span><span class="ta-r">占比</span>
+      </div>
+      {% for c in by_category %}
+        <div class="ledger-row ledger-row-stat">
+          <span class="l-cat">
+            <i class="dot" style="background: {{ c.color }}"></i>
+            <a class="op-link" href="{{ url_for('stats', start=filters.start, end=filters.end, category=c.name, type=filters.type) }}">{{ c.name }}</a>
+          </span>
+          <span class="l-cnt mono muted">{{ c.count }}</span>
+          <span class="l-amt mono {{ c.type }}">{{ '%.2f' | format(c.amount) }}</span>
+          <span class="l-pct mono muted">{{ (c.ratio * 100) | round(1) }}%</span>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script id="chart-data" type="application/json">{{ {"by_category": by_category if by_category else [], "by_month": by_month if by_month else [], "summary": summary} | tojson }}</script>
+<script src="{{ url_for('static', filename='js/vendor/echarts.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+{% endblock %}

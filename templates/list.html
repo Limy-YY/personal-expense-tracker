@@ -1,322 +1,101 @@
 {% extends "base.html" %}
-
-{# ==========================================================================
-   记录列表页（成员D 独立负责）
-   --------------------------------------------------------------------------
-   约定（与 templates/stats.html 一致）：
-     * 继承成员H 的 base.html，只填充 content 块；
-     * 服务端渲染，编辑/删除走原生表单 POST，不依赖任何 JS，
-       这样成员I 的 charts.js、成员H 的全局脚本都不会与本页冲突；
-     * 页面样式统一加 rl- 前缀，不污染成员H 的 static/css/style.css。
-   路由：/records（record_list.py 中的 page_records）
-   ========================================================================== #}
+{% block title %}明细{% endblock %}
 
 {% block content %}
+<section class="overview overview-slim">
+  <div class="overview-top">
+    <h1 class="page-title">明细</h1>
+    <span class="mono muted">{{ total }} 笔 · 第 {{ page }} / {{ total_pages }} 页</span>
+  </div>
+</section>
 
-<style>
-  .rl-wrap { max-width: 960px; margin: 0 auto; }
-  .rl-title { font-size: 20px; margin: 0 0 12px; }
-  .rl-muted { color: #6b7a77; }
-  .rl-alert { border-radius: 8px; padding: 8px 12px; margin: 0 0 12px; font-size: 14px; }
-  .rl-alert--ok { background: #e8f5ec; color: #15803d; border: 1px solid #c6e6d0; }
-  .rl-alert--err { background: #fbeeeb; color: #b4402f; border: 1px solid #e8c9c3; }
-
-  .rl-filters {
-    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 12px;
-    background: #fff; border: 1px solid #e2e8e6; border-radius: 10px; padding: 14px; margin-bottom: 14px;
-  }
-  .rl-field { display: flex; flex-direction: column; gap: 4px; }
-  .rl-field > span { font-size: 12px; color: #6b7a77; }
-  .rl-filters input, .rl-filters select {
-    height: 32px; padding: 0 8px; border: 1px solid #e2e8e6; border-radius: 6px;
-    font-size: 13px; font-family: inherit; background: #fff; color: #1f2a28; outline: none;
-  }
-  .rl-filters input:focus, .rl-filters select:focus { border-color: #0f766e; }
-  .rl-btns { display: flex; align-items: center; gap: 8px; }
-
-  .rl-btn {
-    height: 32px; padding: 0 12px; border: 1px solid #e2e8e6; border-radius: 6px;
-    background: #fff; color: #1f2a28; font-size: 13px; font-family: inherit; cursor: pointer;
-    text-decoration: none; display: inline-flex; align-items: center;
-  }
-  .rl-btn:hover { border-color: #0f766e; color: #0f766e; }
-  .rl-btn--primary { background: #0f766e; border-color: #0f766e; color: #fff; }
-  .rl-btn--primary:hover { background: #0c5f59; color: #fff; }
-  .rl-btn--danger { color: #b4402f; border-color: #e8c9c3; }
-  .rl-btn--danger:hover { background: #fdf2f0; border-color: #b4402f; color: #b4402f; }
-  .rl-btn--sm { height: 26px; padding: 0 8px; font-size: 12px; }
-
-  .rl-panel { background: #fff; border: 1px solid #e2e8e6; border-radius: 10px; margin-bottom: 14px; overflow: hidden; }
-  .rl-panel__head {
-    display: flex; align-items: center; justify-content: space-between; gap: 10px;
-    padding: 10px 14px; border-bottom: 1px solid #e2e8e6; background: #fafbfa; font-size: 13px;
-  }
-  .rl-panel__body { padding: 14px; }
-
-  .rl-table { width: 100%; border-collapse: collapse; font-size: 14px; background: #fff; }
-  .rl-table th, .rl-table td { padding: 9px 12px; text-align: left; border-bottom: 1px solid #eef2f0; }
-  .rl-table th { font-size: 12px; color: #6b7a77; background: #fafbfa; white-space: nowrap; }
-  .rl-table tbody tr:hover { background: #fafcfb; }
-  .rl-table .rl-amount { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
-  .rl-table .rl-note { color: #6b7a77; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .rl-table .rl-ops { white-space: nowrap; display: flex; gap: 6px; }
-  .rl-income { color: #15803d; }
-  .rl-expense { color: #b4402f; }
-
-  .rl-empty { padding: 36px 12px; text-align: center; color: #6b7a77; }
-  .rl-empty strong { display: block; color: #1f2a28; margin-bottom: 6px; }
-
-  .rl-pager { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 0; flex-wrap: wrap; font-size: 13px; }
-  .rl-pager__ctrl { display: flex; align-items: center; gap: 6px; }
-  .rl-btn.is-disabled { opacity: .45; pointer-events: none; }
-
-  .rl-detail { display: grid; grid-template-columns: 96px 1fr; gap: 8px 12px; font-size: 14px; margin-bottom: 12px; }
-  .rl-detail > span:nth-child(odd) { color: #6b7a77; }
-  .rl-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; align-items: end; }
-  .rl-form label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #6b7a77; }
-  .rl-form input, .rl-form select {
-    height: 32px; padding: 0 8px; border: 1px solid #e2e8e6; border-radius: 6px;
-    font-size: 13px; font-family: inherit; outline: none;
-  }
-  .rl-form input:focus, .rl-form select:focus { border-color: #0f766e; }
-
-  @media (max-width: 760px) {
-    .rl-filters, .rl-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .rl-table th:nth-child(5), .rl-table td:nth-child(5) { display: none; }
-  }
-</style>
-
-<div class="rl-wrap">
-
-  <h2 class="rl-title">记录列表</h2>
-
-  {# 保存/删除后的提示；筛选参数非法时也在这里提示，页面不会 500 #}
-  {% if notice %}<div class="rl-alert {{ 'rl-alert--err' if '失败' in notice else 'rl-alert--ok' }}">{{ notice }}</div>{% endif %}
-  {% if error %}<div class="rl-alert rl-alert--err">{{ error }}（已显示全部记录）</div>{% endif %}
-
-  {# ===== 筛选表单：GET 提交到 /records，条件为空表示不限 ===== #}
-  <form class="rl-filters" method="get" action="{{ url_for('record_list.page_records') }}">
-    <label class="rl-field">
-      <span>关键字</span>
-      <input name="keyword" value="{{ filters.keyword or '' }}" placeholder="备注、类别或金额">
-    </label>
-
-    <label class="rl-field">
-      <span>类型</span>
-      <select name="type">
-        <option value="" {{ 'selected' if not filters.type }}>全部</option>
-        <option value="expense" {{ 'selected' if filters.type == 'expense' }}>支出</option>
-        <option value="income" {{ 'selected' if filters.type == 'income' }}>收入</option>
+<form class="panel filter-bar" method="get" action="{{ url_for('record_list') }}" data-filter-form>
+  <div class="filter-grid">
+    <div class="field">
+      <label for="f-start">起始日期</label>
+      <input id="f-start" name="start" type="date" value="{{ filters.start }}">
+    </div>
+    <div class="field">
+      <label for="f-end">结束日期</label>
+      <input id="f-end" name="end" type="date" value="{{ filters.end }}">
+    </div>
+    <div class="field">
+      <label for="f-type">类型</label>
+      <select id="f-type" name="type">
+        <option value="" {{ 'selected' if not filters.type else '' }}>全部</option>
+        <option value="expense" {{ 'selected' if filters.type == 'expense' else '' }}>支出</option>
+        <option value="income" {{ 'selected' if filters.type == 'income' else '' }}>收入</option>
       </select>
-    </label>
-
-    <label class="rl-field">
-      <span>类别</span>
-      <select name="category">
-        <option value="" {{ 'selected' if not filters.category }}>全部类别</option>
-        {% for name in category_options %}
-        <option value="{{ name }}" {{ 'selected' if filters.category == name }}>{{ name }}</option>
+    </div>
+    <div class="field">
+      <label for="f-cat">类别</label>
+      <select id="f-cat" name="category">
+        <option value="" {{ 'selected' if not filters.category else '' }}>全部</option>
+        {% for c in categories %}
+          <option value="{{ c.name }}" {{ 'selected' if filters.category == c.name else '' }}>{{ c.name }}</option>
         {% endfor %}
       </select>
-    </label>
-
-    <label class="rl-field">
-      <span>排序</span>
-      <select name="sort">
-        <option value="date_desc" {{ 'selected' if sort == 'date_desc' }}>日期 新→旧</option>
-        <option value="date_asc" {{ 'selected' if sort == 'date_asc' }}>日期 旧→新</option>
-        <option value="amount_desc" {{ 'selected' if sort == 'amount_desc' }}>金额 高→低</option>
-        <option value="amount_asc" {{ 'selected' if sort == 'amount_asc' }}>金额 低→高</option>
-      </select>
-    </label>
-
-    <label class="rl-field">
-      <span>开始日期</span>
-      <input type="date" name="start" value="{{ filters.start or '' }}">
-    </label>
-
-    <label class="rl-field">
-      <span>结束日期</span>
-      <input type="date" name="end" value="{{ filters.end or '' }}">
-    </label>
-
-    <label class="rl-field">
-      <span>最小金额</span>
-      <input type="number" step="0.01" min="0" name="min_amount" value="{{ filters.min_amount or '' }}" placeholder="不限">
-    </label>
-
-    <label class="rl-field">
-      <span>每页条数</span>
-      <select name="size">
-        {% for option in (5, 10, 20, 50) %}
-        <option value="{{ option }}" {{ 'selected' if result.size == option }}>{{ option }} 条/页</option>
-        {% endfor %}
-      </select>
-    </label>
-
-    <div class="rl-btns">
-      <button type="submit" class="rl-btn rl-btn--primary">查询</button>
-      <a class="rl-btn" href="{{ url_for('record_list.page_records') }}">重置</a>
     </div>
-  </form>
-
-  {# ===== 详情面板：点击列表"查看"后展开（focus=<id>），含编辑表单与相邻翻阅 ===== #}
-  {% if detail %}
-  <div class="rl-panel">
-    <div class="rl-panel__head">
-      <span>记录详情 · 按当前排序第 {{ detail.neighbors.index }} / {{ detail.neighbors.total }} 笔</span>
-      <a class="rl-btn rl-btn--sm" href="{{ build_url() }}">关闭</a>
+    <div class="field field-wide">
+      <label for="f-kw">备注关键词</label>
+      <input id="f-kw" name="keyword" type="search" placeholder="搜索备注内容" value="{{ filters.keyword }}">
     </div>
-    <div class="rl-panel__body">
-      <div class="rl-detail">
-        <span>日期</span><span>{{ detail.record.date }}</span>
-        <span>类型</span>
-        <span>{{ '收入' if detail.record.type == 'income' else '支出' }}</span>
-        <span>金额</span>
-        <span class="{{ 'rl-income' if detail.record.type == 'income' else 'rl-expense' }}">
-          {{ '%.2f'|format(detail.record.amount) }} 元
-        </span>
-        <span>类别</span><span>{{ detail.record.category }}</span>
-        <span>备注</span><span>{{ detail.record.note or '—' }}</span>
-        <span>账户</span><span>{{ detail.record.account or '默认账户' }}</span>
+    <div class="filter-actions">
+      <button class="btn btn-primary" type="submit">筛选</button>
+      <a class="btn btn-ghost" href="{{ url_for('record_list') }}">重置</a>
+    </div>
+  </div>
+</form>
+
+<section class="panel">
+  <header class="panel-head">
+    <h2>记录</h2>
+  </header>
+
+  {% if records %}
+    <div class="ledger ledger-full">
+      <div class="ledger-head" aria-hidden="true">
+        <span>日期</span><span>类别</span><span>账户</span><span>备注</span><span class="ta-r">金额</span><span class="ta-r">操作</span>
       </div>
-
-      {# ===== 编辑表单：POST 到 /records/<id>/edit，只提交下面这些字段 =====
-         隐藏域统一用 ret_ 前缀，把当前页码与筛选条件带回列表页；
-         不能直接用 type/category 命名，否则会和本表单里的记录字段重名。 #}
-      <form class="rl-form" method="post" action="{{ url_for('record_list.page_edit_record', record_id=detail.record.id) }}">
-        <input type="hidden" name="ret_page" value="{{ result.page }}">
-        <input type="hidden" name="ret_size" value="{{ result.size }}">
-        <input type="hidden" name="ret_sort" value="{{ sort }}">
-        <input type="hidden" name="ret_keyword" value="{{ filters.keyword or '' }}">
-        <input type="hidden" name="ret_type" value="{{ filters.type or '' }}">
-        <input type="hidden" name="ret_category" value="{{ filters.category or '' }}">
-        <input type="hidden" name="ret_start" value="{{ filters.start or '' }}">
-        <input type="hidden" name="ret_end" value="{{ filters.end or '' }}">
-        <input type="hidden" name="ret_min_amount" value="{{ filters.min_amount or '' }}">
-
-        <label>日期
-          <input type="date" name="date" value="{{ detail.record.date }}" required>
-        </label>
-        <label>类型
-          <select name="type" required>
-            <option value="expense" {{ 'selected' if detail.record.type == 'expense' }}>支出</option>
-            <option value="income" {{ 'selected' if detail.record.type == 'income' }}>收入</option>
-          </select>
-        </label>
-        <label>金额
-          <input type="number" name="amount" step="0.01" min="0.01" value="{{ detail.record.amount }}" required>
-        </label>
-        <label>类别
-          <input type="text" name="category" maxlength="20" value="{{ detail.record.category }}" required>
-        </label>
-        <label>备注
-          <input type="text" name="note" maxlength="100" value="{{ detail.record.note or '' }}">
-        </label>
-        <div class="rl-btns">
-          <button type="submit" class="rl-btn rl-btn--primary">保存修改</button>
+      {% for r in records %}
+        <div class="ledger-row">
+          <span class="l-date mono">{{ r.date }}</span>
+          <span class="l-cat"><i class="dot" style="background: {{ r.color }}"></i>{{ r.category }}</span>
+          <span class="l-acc-cell">{{ r.account }}</span>
+          <span class="l-note"><i class="l-acc">{{ r.account }}</i>{{ r.note or '—' }}</span>
+          <span class="l-amt mono {{ r.type }}">{{ '+' if r.type == 'income' else '−' }}{{ '%.2f' | format(r.amount) }}</span>
+          <span class="l-ops">
+            <a class="op-link" href="{{ url_for('record_edit', record_id=r.id) }}">编辑</a>
+            <form method="post" action="{{ url_for('record_delete', record_id=r.id) }}" class="inline-form"
+                  data-confirm="删除后无法恢复，确定删除这笔「{{ r.category }} {{ '%.2f' | format(r.amount) }}」吗？">
+              <button class="op-link op-danger" type="submit">删除</button>
+            </form>
+          </span>
         </div>
-      </form>
-
-      <div class="rl-btns" style="margin-top:12px;">
-        <a class="rl-btn {{ 'is-disabled' if not detail.neighbors.prev }}"
-           href="{{ build_url(focus=detail.neighbors.prev.id) if detail.neighbors.prev else build_url() }}">← 上一笔</a>
-        <a class="rl-btn {{ 'is-disabled' if not detail.neighbors.next }}"
-           href="{{ build_url(focus=detail.neighbors.next.id) if detail.neighbors.next else build_url() }}">下一笔 →</a>
-
-        <form method="post" style="margin-left:auto;"
-              action="{{ url_for('record_list.page_delete_record', record_id=detail.record.id) }}"
-              onsubmit="return confirm('确认删除这条记录吗？删除后不可恢复。');">
-          <input type="hidden" name="ret_page" value="{{ result.page }}">
-          <input type="hidden" name="ret_size" value="{{ result.size }}">
-          <input type="hidden" name="ret_sort" value="{{ sort }}">
-          <input type="hidden" name="ret_keyword" value="{{ filters.keyword or '' }}">
-          <input type="hidden" name="ret_type" value="{{ filters.type or '' }}">
-          <input type="hidden" name="ret_category" value="{{ filters.category or '' }}">
-          <input type="hidden" name="ret_start" value="{{ filters.start or '' }}">
-          <input type="hidden" name="ret_end" value="{{ filters.end or '' }}">
-          <input type="hidden" name="ret_min_amount" value="{{ filters.min_amount or '' }}">
-          <button type="submit" class="rl-btn rl-btn--danger">删除这条记录</button>
-        </form>
-      </div>
+      {% endfor %}
     </div>
-  </div>
-  {% endif %}
 
-  {# ===== 记录列表 ===== #}
-  <div class="rl-panel">
-    <table class="rl-table">
-      <thead>
-        <tr>
-          <th style="width:110px;">日期</th>
-          <th style="width:70px;">类型</th>
-          <th style="width:100px;">金额</th>
-          <th style="width:100px;">类别</th>
-          <th>备注</th>
-          <th style="width:130px;">操作</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% if result.records %}
-          {% for record in result.records %}
-          <tr>
-            <td>{{ record.date }}</td>
-            <td>
-              <span class="{{ 'rl-income' if record.type == 'income' else 'rl-expense' }}">
-                {{ '收入' if record.type == 'income' else '支出' }}
-              </span>
-            </td>
-            <td class="rl-amount {{ 'rl-income' if record.type == 'income' else 'rl-expense' }}">
-              {{ '%.2f'|format(record.amount) }}
-            </td>
-            <td>{{ record.category }}</td>
-            <td class="rl-note" title="{{ record.note or '' }}">{{ record.note or '—' }}</td>
-            <td class="rl-ops">
-              <a class="rl-btn rl-btn--sm" href="{{ build_url(focus=record.id) }}">查看</a>
-              <form method="post"
-                    action="{{ url_for('record_list.page_delete_record', record_id=record.id) }}"
-                    onsubmit="return confirm('确认删除这条记录吗？删除后不可恢复。');">
-                <input type="hidden" name="ret_page" value="{{ result.page }}">
-                <input type="hidden" name="ret_size" value="{{ result.size }}">
-                <input type="hidden" name="ret_sort" value="{{ sort }}">
-                <input type="hidden" name="ret_keyword" value="{{ filters.keyword or '' }}">
-                <input type="hidden" name="ret_type" value="{{ filters.type or '' }}">
-                <input type="hidden" name="ret_category" value="{{ filters.category or '' }}">
-                <input type="hidden" name="ret_start" value="{{ filters.start or '' }}">
-                <input type="hidden" name="ret_end" value="{{ filters.end or '' }}">
-                <input type="hidden" name="ret_min_amount" value="{{ filters.min_amount or '' }}">
-                <button type="submit" class="rl-btn rl-btn--sm rl-btn--danger">删除</button>
-              </form>
-            </td>
-          </tr>
-          {% endfor %}
-        {% else %}
-          <tr>
-            <td colspan="6" class="rl-empty">
-              <strong>没有符合条件的记录</strong>
-              换个筛选条件，或到「记一笔」页面新增记录。
-            </td>
-          </tr>
-        {% endif %}
-      </tbody>
-    </table>
-  </div>
-
-  {# ===== 分页：所有链接都带上当前筛选条件，翻页不丢条件 ===== #}
-  <div class="rl-pager">
-    <div class="rl-muted">
-      {% if result.total %}
-        共 {{ result.total }} 笔，当前第 {{ result.offset + 1 }}–{{ result.offset + result.records|length }} 条
+    <nav class="pager" aria-label="分页">
+      {% if page > 1 %}
+        <a class="pager-btn" href="{{ url_for('record_list', page=page-1, start=filters.start, end=filters.end, type=filters.type, category=filters.category, keyword=filters.keyword) }}">上一页</a>
       {% else %}
-        共 0 笔
+        <span class="pager-btn is-off">上一页</span>
       {% endif %}
-    </div>
-    <div class="rl-pager__ctrl">
-      <a class="rl-btn {{ 'is-disabled' if not result.has_prev }}" href="{{ build_url(page=result.page - 1) }}">上一页</a>
-      <span>{{ result.page }} / {{ result.pages }}</span>
-      <a class="rl-btn {{ 'is-disabled' if not result.has_next }}" href="{{ build_url(page=result.page + 1) }}">下一页</a>
-    </div>
-  </div>
 
-</div>
+      <span class="pager-now mono">{{ page }} / {{ total_pages }}</span>
+
+      {% if page < total_pages %}
+        <a class="pager-btn" href="{{ url_for('record_list', page=page+1, start=filters.start, end=filters.end, type=filters.type, category=filters.category, keyword=filters.keyword) }}">下一页</a>
+      {% else %}
+        <span class="pager-btn is-off">下一页</span>
+      {% endif %}
+    </nav>
+  {% else %}
+    <div class="empty">
+      <p class="empty-title">这个条件下没有记录</p>
+      <p class="empty-hint">换个日期范围，或者清空筛选条件再看看。</p>
+      <a class="btn btn-ghost" href="{{ url_for('record_list') }}">清空筛选</a>
+    </div>
+  {% endif %}
+</section>
 {% endblock %}

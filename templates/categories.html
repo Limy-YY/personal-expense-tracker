@@ -1,100 +1,55 @@
 {% extends "base.html" %}
-
-{% block title %}分类{% endblock %}
+{% block title %}类别{% endblock %}
 
 {% block content %}
-<div class="page-head">
-  <div>
-    <h1>分类管理</h1>
-    <p class="page-sub">维护收支类别与颜色，图表会自动使用这些颜色。</p>
+<section class="overview overview-slim">
+  <div class="overview-top">
+    <h1 class="page-title">类别管理</h1>
   </div>
-</div>
-
-<section class="two-col">
-  <article class="card">
-    <div class="card-head">
-      <h2>新增类别</h2>
-    </div>
-
-    <form class="form" method="post" action="/categories" data-validate>
-      <div class="field">
-        <label for="name">名称</label>
-        <input id="name" name="name" type="text" maxlength="20" placeholder="如：餐饮" required>
-        <p class="field-error" data-error-for="name"></p>
-      </div>
-
-      <div class="field">
-        <span class="field-label">类型</span>
-        <div class="segmented" data-segmented>
-          <label class="segment is-active">
-            <input type="radio" name="type" value="expense" checked>
-            <span>支出</span>
-          </label>
-          <label class="segment">
-            <input type="radio" name="type" value="income">
-            <span>收入</span>
-          </label>
-        </div>
-      </div>
-
-      <div class="field">
-        <label for="color">颜色</label>
-        <input id="color" name="color" type="color" value="#4f46e5">
-      </div>
-
-      <div class="form-actions">
-        <button class="btn btn-primary" type="submit">添加类别</button>
-      </div>
-    </form>
-  </article>
-
-  <article class="card">
-    <div class="card-head">
-      <h2>已有类别</h2>
-      <span class="muted small">{{ categories | length }} 个</span>
-    </div>
-
-    {% if categories %}
-      <div class="table-wrap">
-        <table class="table">
-          <thead>
-            <tr>
-              <th>类别</th>
-              <th>类型</th>
-              <th class="num">使用次数</th>
-              <th class="actions">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for category in categories %}
-              <tr>
-                <td>
-                  <span class="chip">
-                    <i class="dot" style="background: {{ category.color }}"></i>
-                    {{ category.name }}
-                  </span>
-                </td>
-                <td><span class="badge badge-{{ category.type }}">{{ category.type | type_label }}</span></td>
-                <td class="num">{{ category.count }}</td>
-                <td class="actions">
-                  {% if category.count == 0 %}
-                    <form class="inline-form" method="post" action="/api/categories/{{ category.name }}" data-confirm="确定删除分类「{{ category.name }}」吗？">
-                      <button class="btn btn-sm btn-danger-ghost" type="submit">删除</button>
-                    </form>
-                  {% else %}
-                    <span class="muted small">使用中</span>
-                  {% endif %}
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    {% else %}
-      <div class="empty">
-        <p>还没有类别，先添加一个吧。</p>
-      </div>
-    {% endif %}
-  </article>
 </section>
+
+<div class="cat-grid">
+  {% for group in cat_groups %}
+    <section class="panel">
+      <header class="panel-head">
+        <h2>{{ group.title }}</h2>
+        <span class="panel-hint muted">{{ group['items'] | length }} 个类别</span>
+      </header>
+
+      <div class="cat-list">
+        {% for c in group['items'] %}
+          <div class="cat-item">
+            <i class="dot" style="background: {{ c.color }}"></i>
+            <span class="cat-name">{{ c.name }}</span>
+            <span class="cat-count mono muted">{{ c.count }} 笔</span>
+            <form method="post" action="{{ url_for('category_delete') }}" class="inline-form"
+                  data-confirm="删除类别「{{ c.name }}」后，已有 {{ c.count }} 笔记录会保留但失去分类归属，确定删除吗？">
+              <input type="hidden" name="name" value="{{ c.name }}">
+              <input type="hidden" name="type" value="{{ c.type }}">
+              <button class="op-link op-danger" type="submit">删除</button>
+            </form>
+          </div>
+        {% else %}
+          <p class="muted empty-hint">还没有类别，先在下面添加一个。</p>
+        {% endfor %}
+      </div>
+
+      <form class="cat-add" method="post" action="{{ url_for('category_add') }}" novalidate data-cat-form>
+        <input type="hidden" name="type" value="{{ group.type }}">
+        <label class="field">
+          <span class="sr-label">新类别名称</span>
+          <input name="name" type="text" maxlength="8" placeholder="新类别名称，如「话费」" required>
+        </label>
+        <div class="swatches" role="radiogroup" aria-label="颜色">
+          {% for color in palette %}
+            <input type="radio" name="color" id="c-{{ group.type }}-{{ loop.index }}" value="{{ color }}"
+                   {{ 'checked' if loop.first else '' }}>
+            <label for="c-{{ group.type }}-{{ loop.index }}" style="background: {{ color }}"></label>
+          {% endfor %}
+        </div>
+        <button class="btn btn-primary" type="submit">添加</button>
+      </form>
+    </section>
+  {% endfor %}
+</div>
 {% endblock %}

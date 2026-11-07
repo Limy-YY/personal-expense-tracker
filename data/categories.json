@@ -1,0 +1,82 @@
+[
+  {
+    "name": "饮食",
+    "type": "expense",
+    "color": "#2c7a5b",
+    "budget": 1500,
+    "icon": "🍜"
+  },
+  {
+    "name": "交通",
+    "type": "expense",
+    "color": "#3d6a8f",
+    "budget": 300,
+    "icon": "🚌"
+  },
+  {
+    "name": "购物",
+    "type": "expense",
+    "color": "#8c6e27",
+    "budget": 500,
+    "icon": "🛍️"
+  },
+  {
+    "name": "娱乐",
+    "type": "expense",
+    "color": "#2f6f6a",
+    "budget": 300,
+    "icon": "🎮"
+  },
+  {
+    "name": "居住",
+    "type": "expense",
+    "color": "#a2613c",
+    "budget": 2000,
+    "icon": "🏠"
+  },
+  {
+    "name": "医疗",
+    "type": "expense",
+    "color": "#b23c2e",
+    "budget": 200,
+    "icon": "💊"
+  },
+  {
+    "name": "教育",
+    "type": "expense",
+    "color": "#4a5a6a",
+    "budget": 200,
+    "icon": "📚"
+  },
+  {
+    "name": "工资",
+    "type": "income",
+    "color": "#2c7a5b",
+    "icon": "💰"
+  },
+  {
+    "name": "兼职",
+    "type": "income",
+    "color": "#7a6a3f",
+    "icon": "💴"
+  },
+  {
+    "name": "红包",
+    "type": "income",
+    "color": "#b23c2e",
+    "icon": "🧧"
+  },
+  {
+    "name": "其他收入",
+    "type": "income",
+    "color": "#8a9a91",
+    "icon": "📦"
+  },
+  {
+    "name": "其他",
+    "type": "expense",
+    "color": "#8a9a91",
+    "budget": 200,
+    "icon": "📦"
+  }
+]

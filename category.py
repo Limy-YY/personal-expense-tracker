@@ -43,18 +43,18 @@ RECORDS_FILE = os.path.join(DATA_DIR, "records.json")
 # budget = 月度预算金额（元），仅支出类设置；收入类不设预算
 # icon = 前端展示图标（emoji），可选
 DEFAULT_CATEGORIES = [
-    {"name": "饮食", "type": "expense", "color": "#ff7043", "budget": 1500, "icon": "🍜"},
-    {"name": "交通", "type": "expense", "color": "#42a5f5", "budget": 300,  "icon": "🚌"},
-    {"name": "购物", "type": "expense", "color": "#ab47bc", "budget": 500,  "icon": "🛍️"},
-    {"name": "娱乐", "type": "expense", "color": "#26a69a", "budget": 300,  "icon": "🎮"},
-    {"name": "居住", "type": "expense", "color": "#66bb6a", "budget": 2000, "icon": "🏠"},
-    {"name": "医疗", "type": "expense", "color": "#ef5350", "budget": 200,  "icon": "💊"},
-    {"name": "教育", "type": "expense", "color": "#5c6bc0", "budget": 200,  "icon": "📚"},
-    {"name": "工资", "type": "income",  "color": "#ffa726", "icon": "💰"},
-    {"name": "兼职", "type": "income",  "color": "#ec407a", "icon": "💴"},
-    {"name": "红包", "type": "income",  "color": "#d4a017", "icon": "🧧"},
-    {"name": "其他收入", "type": "income", "color": "#9e9e9e", "icon": "📦"},
-    {"name": "其他支出", "type": "expense", "color": "#9e9e9e", "budget": 200,  "icon": "📦"},
+    {"name": "饮食", "type": "expense", "color": "#2c7a5b", "budget": 1500, "icon": "🍜"},
+    {"name": "交通", "type": "expense", "color": "#3d6a8f", "budget": 300,  "icon": "🚌"},
+    {"name": "购物", "type": "expense", "color": "#8c6e27", "budget": 500,  "icon": "🛍️"},
+    {"name": "娱乐", "type": "expense", "color": "#2f6f6a", "budget": 300,  "icon": "🎮"},
+    {"name": "居住", "type": "expense", "color": "#a2613c", "budget": 2000, "icon": "🏠"},
+    {"name": "医疗", "type": "expense", "color": "#b23c2e", "budget": 200,  "icon": "💊"},
+    {"name": "教育", "type": "expense", "color": "#4a5a6a", "budget": 200,  "icon": "📚"},
+    {"name": "工资", "type": "income",  "color": "#2c7a5b", "icon": "💰"},
+    {"name": "兼职", "type": "income",  "color": "#7a6a3f", "icon": "💴"},
+    {"name": "红包", "type": "income",  "color": "#b23c2e", "icon": "🧧"},
+    {"name": "其他收入", "type": "income", "color": "#8a9a91", "icon": "📦"},
+    {"name": "其他", "type": "expense", "color": "#8a9a91", "budget": 200,  "icon": "📦"},
 ]
 
 VALID_TYPES = ("expense", "income")  # 校验 type，只能是支出/收入
@@ -62,7 +62,8 @@ HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")  # 校验 6 位十六进制颜�
 # 分类名禁止出现 URL 路由特殊字符，否则 /api/categories/<name> 匹配不到
 NAME_BAD_CHARS = re.compile(r"[/?#&=]")  # 检查名字里不能包含 / ? # & = 这些字符
 # 兜底分类：受保护不可删除，删除其他分类时历史记录自动迁移到同类型兜底
-PROTECTED_CATEGORY = "其他支出"  # 支出类兜底；收入类兜底是"其他收入"
+PROTECTED_CATEGORY = "其他"           # 支出类兜底
+PROTECTED_INCOME_CATEGORY = "其他收入"  # 收入类兜底
 
 
 # ============ 数据读写 ============
@@ -263,11 +264,11 @@ def delete_category(name):
     target = next((c for c in cats if c["name"] == name), None)
     if target is None:
         raise ValueError(f"分类「{name}」不存在")
-    if name == PROTECTED_CATEGORY:
-        raise ValueError(f"「{PROTECTED_CATEGORY}」是系统兜底分类，禁止删除")
+    if name in (PROTECTED_CATEGORY, PROTECTED_INCOME_CATEGORY):
+        raise ValueError(f"「{name}」是系统兜底分类，禁止删除")
 
     # 找同类型的兜底分类：支出→「其他」，收入→「其他收入」
-    fallback_name = PROTECTED_CATEGORY if target["type"] == "expense" else "其他收入"
+    fallback_name = PROTECTED_CATEGORY if target["type"] == "expense" else PROTECTED_INCOME_CATEGORY
     fallback = next(
         (c for c in cats if c["name"] == fallback_name and c["type"] == target["type"]),
         None,
@@ -387,13 +388,13 @@ if __name__ == "__main__":
         except ValueError as e:
             print("预期报错：", e)
 
-        print("\n=== 测试：删除兜底分类「其他支出」应报错 ===")
+        print("\n=== 测试：删除兜底分类「其他」应报错 ===")
         try:
-            delete_category("其他支出")
+            delete_category("其他")
         except ValueError as e:
             print("预期报错：", e)
 
-        print("\n=== 测试：删除有记录引用的分类，记录自动迁移到「其他支出」 ===")
+        print("\n=== 测试：删除有记录引用的分类，记录自动迁移到「其他」 ===")
         # 手动塞两条引用"宠物"的记录（自测时直接写文件）
         records = [
             {"id": "r1", "type": "expense", "date": "2026-11-07", "amount": 100, "category": "宠物", "note": "猫粮"},
