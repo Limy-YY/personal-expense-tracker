@@ -1,0 +1,48 @@
+
+[
+  {
+    "id": "sample001",
+    "type": "expense",
+    "date": "2026-11-03",
+    "amount": 18.5,
+    "category": "餐饮",
+    "note": "学校食堂午餐",
+    "account": "微信"
+  },
+  {
+    "id": "sample002",
+    "type": "expense",
+    "date": "2026-11-04",
+    "amount": 6.0,
+    "category": "交通",
+    "note": "地铁",
+    "account": "支付宝"
+  },
+  {
+    "id": "sample003",
+    "type": "income",
+    "date": "2026-11-05",
+    "amount": 1500.0,
+    "category": "兼职",
+    "note": "周末兼职收入",
+    "account": "银行卡"
+  },
+  {
+    "id": "sample004",
+    "type": "expense",
+    "date": "2026-11-06",
+    "amount": 39.9,
+    "category": "购物",
+    "note": "",
+    "account": "支付宝"
+  },
+  {
+    "id": "sample005",
+    "type": "income",
+    "date": "2026-11-07",
+    "amount": 200.0,
+    "category": "其他",
+    "note": "生活费",
+    "account": "微信"
+  }
+]
