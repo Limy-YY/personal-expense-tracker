@@ -3,7 +3,7 @@
 query.py — 筛选与搜索模块（成员G 独立负责）
 ============================================================
 模块职责：
-  1. 关键字搜索（多词“且”匹配：id / 类别 / 备注 / 账户 / 日期）；
+  1. 关键字搜索（多词“且”匹配：id / 类别 / 备注 / 账户）；
   2. 组合条件筛选（类型 + 类别 + 账户 + 日期区间 + 金额区间 + 指定 id，条件之间“且”）；
   3. 排序（日期 / 金额 / id，升序或降序）与分页，供「记录查看」（成员D）直接用；
   4. 输出筛选下拉框的取值（类别 / 账户 / 类型）。
@@ -259,9 +259,15 @@ def _record_type(record: Dict[str, Any]) -> str:
 
 
 def _search_text(record: Dict[str, Any]) -> str:
-    """关键字检索的文本池：ID、类别、备注、账户、日期（金额不参与，避免搜“2”命中一片）。"""
+    """
+    关键字检索的文本池：ID、类别、备注、账户。
+
+    刻意不包含 amount 和 date：
+      - 金额：否则搜“2”会命中一片（金额用 min_amount / max_amount 专管）；
+      - 日期：否则每笔都以“2026”开头，搜年份/月份等于全量（日期用 start_date / end_date 专管）。
+    """
     return " ".join(
-        _norm_text(record.get(field)) for field in ("id", "category", "note", "account", "date")
+        _norm_text(record.get(field)) for field in ("id", "category", "note", "account")
     )
 
 
@@ -424,7 +430,7 @@ def query_records(**conditions: Any) -> List[Dict[str, Any]]:
     统一查询入口：取全部记录 → 组合条件筛选 → 排序。
 
     支持的条件（都可省略、可任意组合）：
-        keyword     关键字，空格分词后需全部命中；检索 id / 类别 / 备注 / 账户 / 日期
+        keyword     关键字，空格分词后需全部命中；检索 id / 类别 / 备注 / 账户（金额与日期不参与）
         type        income / expense，也接受“收入 / 支出 / 全部”（别名 rtype）
         category    类别，单值、列表或逗号分隔，多值时“或”
         account     账户，同上
@@ -577,6 +583,12 @@ if __name__ == "__main__":
 
     print("\n=== 关键字“微信 火锅” ===")
     print([r["id"] for r in apply_filters(demo, keyword="微信 火锅")])
+
+    print("\n=== 金额 / 日期不参与关键字检索（否则搜 2、搜 2026 等于全量）===")
+    for bad_kw in ("2026", "2026-11"):
+        assert apply_filters(demo, keyword=bad_kw) == [], f"关键字 {bad_kw!r} 不该命中任何记录"
+    assert len(apply_filters(demo, keyword="2")) < len(demo), "关键字 '2' 不该命中全部"
+    print("搜 2026 / 2026-11 命中 0 条、搜 2 不再全量：通过")
 
     print("\n=== 金额 6~120（含边界）===")
     print([(r["id"], r["amount"]) for r in apply_filters(demo, min_amount="6", max_amount="120")])
