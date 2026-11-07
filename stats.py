@@ -8,8 +8,11 @@ stats.py — 统计模块（成员E 独立负责）
   3. 按类别聚合金额、笔数、占比（供分类表与饼图，对接成员I 的图表脚本）；
   4. 组装统计页模板所需的视图数据（对齐 docs/ui-conventions.md）。
 
-数据文件 data/records.json 由成员B 的 storage.py 统一读写；
-联调时把 _load_records / _load_categories 换成 storage 的读取接口即可。
+数据来源（一律走其他成员模块的接口，不在统计模块直接读写 JSON 文件，
+避免并发写入与数据校验口径不一致）：
+  - 记录：成员B 的 storage.load_records()；
+  - 分类：成员F 的 category.list_categories()。
+  - 接口不可用或数据异常时回退空列表，保证统计页不崩；校验/持久化归接口负责。
 
 记录数据契约（与 storage.py / record_add.py 一致）：
   {"id": "...", "type": "income"|"expense", "date": "YYYY-MM-DD",
@@ -19,9 +22,8 @@ stats.py — 统计模块（成员E 独立负责）
   filter_records(records, date_from, date_to, category, rtype, amount_min, amount_max)
   summarize(records)                       -> dict
   aggregate_by_category(records, rtype)   -> list[dict]
-  get_stats(**filters)                     -> dict  # 模板上下文（契约字段）
+  get_stats(**filters)                      -> dict  # 模板上下文（契约字段）
 """
-import os
 from decimal import Decimal, ROUND_HALF_UP
 
 # Flask 是部署依赖；本地自测时没装也不影响业务函数（与 category.py 同一写法）
@@ -31,48 +33,39 @@ try:
 except ImportError:
     _HAS_FLASK = False
 
-# ============ 配置 ============
-DATA_FILE = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "data", "records.json"
-)
+# ============ 复用其他成员模块接口 ============
+try:
+    from storage import load_records as _storage_load_records
+except ImportError:
+    _storage_load_records = None
+
+try:
+    from category import list_categories as _category_list
+except ImportError:
+    _category_list = None
 
 _CENT = Decimal("0.01")
 
 
-# ============ 数据读取（联调时改为调用成员B storage.py 的统一接口） ============
-# TODO(联调): 换成 from storage import load_records / load_categories
+# ============ 数据读取（只走接口，不直接读 JSON 文件） ============
 def _load_records():
-    """读取记录列表；文件不存在或损坏时回退空列表。"""
-    data = _load_data()
-    return data.get("records", []) if isinstance(data, dict) else []
-
-
-def _load_categories():
-    """读取分类列表 [{name,type,color,...}]；供分类表与图表配色。
-    联调修正（J）：分类由成员F 的 category.py 统一管理（data/categories.json），
-    改走 F 的 list_categories() 接口，不再从 records.json 里找。"""
+    """读取记录列表；走成员B 的 storage 接口，异常回退空列表。"""
+    if _storage_load_records is None:
+        return []
     try:
-        from category import list_categories
-        return list_categories()
+        return _storage_load_records()
     except Exception:
         return []
 
 
-def _load_data():
-    """读取整个 data/records.json；不存在或损坏时回退空结构。"""
-    if not os.path.exists(DATA_FILE):
-        return {"records": [], "categories": []}
+def _load_categories():
+    """读取分类列表；走成员F 的 category 接口，异常回退空列表。"""
+    if _category_list is None:
+        return []
     try:
-        import json
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        if isinstance(data, dict):
-            data.setdefault("records", [])
-            data.setdefault("categories", [])
-            return data
-        return {"records": data if isinstance(data, list) else [], "categories": []}
+        return _category_list()
     except Exception:
-        return {"records": [], "categories": []}
+        return []
 
 
 # ============ 内部工具 ============
@@ -91,11 +84,15 @@ def _round_money(value):
 
 # ============ Jinja 过滤器（在 app.py 注册：app.jinja_env.filters[...]） ============
 def money(value):
-    """金额过滤器：¥1,234.56；输入非法时显示 ¥0.00。"""
+    """
+    金额过滤器：只返回两位小数字符串（如 1834.50），不带 ¥ 符号。
+    ¥ 前缀由模板负责（参考 record_list.html：¥{{ amount | money }}），
+    过滤器里再加 ¥ 会出现双重 ¥¥。
+    """
     try:
-        return f"¥{float(value):.2f}"
+        return f"{float(value):.2f}"
     except Exception:
-        return "¥0.00"
+        return "0.00"
 
 
 def type_label(record_type):
@@ -302,3 +299,4 @@ if __name__ == "__main__":
     print("=== 分类行 ===", view["category_rows"])
     print("=== 图表数据条数 ===", len(view["chart_data"]["records"]))
     print("=== 笔数 ===", view["total"])
+    print("=== money 过滤器（不带 ¥） ===", money(1834.5))
