@@ -157,7 +157,7 @@ class TestGetStats(unittest.TestCase):
 
     @unittest.expectedFailure
     def test_all_records_missing_fields(self):
-        """回归用例（issue #17）：records 混入 None 应跳过不崩。
+        """回归用例（issue #18）：records 混入 None 应跳过不崩。
         演示前 #3 已修复，重构时丢失；E 修复后移除 @unittest.expectedFailure。"""
         r = stats.get_stats(records=[{"id": "x"}, {}, None])
         self.assertEqual(r["total"], 2)
