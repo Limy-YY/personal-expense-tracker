@@ -46,6 +46,7 @@ DEFAULT_CATEGORIES = [
     {"name": "工资", "type": "income",  "color": "#ffa726", "icon": "💰"},
     {"name": "兼职", "type": "income",  "color": "#ec407a", "icon": "💴"},
     {"name": "红包", "type": "income",  "color": "#d4a017", "icon": "🧧"},
+    {"name": "其他收入", "type": "income", "color": "#9e9e9e", "icon": "📦"},
     {"name": "其他", "type": "expense", "color": "#9e9e9e", "budget": 200,  "icon": "📦"},
 ]
 
@@ -82,8 +83,8 @@ def _load_categories():
             raise RuntimeError(f"categories[{i}] 缺少合法 name")
         if c.get("type") not in VALID_TYPES:
             raise RuntimeError(f"categories[{i}] 的 type 非法")
-        if not isinstance(c.get("color"), str):
-            raise RuntimeError(f"categories[{i}] 缺少合法 color")
+        if not isinstance(c.get("color"), str) or not HEX_COLOR_RE.match(c.get("color", "")):
+            raise RuntimeError(f"categories[{i}] 的 color 不是 #RRGGBB 格式")
     return cats
 
 
@@ -94,15 +95,21 @@ def _save_categories(cats):
 
 
 def _load_records():
-    """读取 records（用于改名/删除时联动）；文件不存在返回空 list。"""
+    """读取 records（用于改名/删除时联动）；文件不存在返回空 list。
+    损坏时抛 RuntimeError，不静默返回空列表，防止删除分类时漏迁移记录。
+    """
     if not os.path.exists(RECORDS_FILE):
         return []
     try:
         with open(RECORDS_FILE, "r", encoding="utf-8") as f:
             records = json.load(f)
-    except (json.JSONDecodeError, OSError):
-        return []
-    return records if isinstance(records, list) else []
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"records.json 已损坏：{e}") from e
+    except OSError as e:
+        raise RuntimeError(f"records.json 读取失败：{e}") from e
+    if not isinstance(records, list):
+        raise RuntimeError("records.json 顶层不是数组")
+    return records
 
 
 def _save_records(records):
@@ -123,6 +130,8 @@ def list_categories(c_type=None):
     """列出分类；c_type=None=全部，'expense'/'income' 按收支类型筛选。"""
     cats = _load_categories()
     if c_type:
+        if c_type not in VALID_TYPES:
+            raise ValueError("type 必须是 expense 或 income")
         cats = [c for c in cats if c["type"] == c_type]
     return cats
 
@@ -224,24 +233,32 @@ def update_category(old_name, new_name=None, color=None, budget=None, icon=None)
 
 def delete_category(name):
     """
-    删除分类（方案②：自动迁移到兜底分类「其他」）。
+    删除分类（方案②：自动迁移到同类型兜底分类「其他」）。
     - 「其他」是受保护兜底分类，禁止删除；
-    - 被记录引用的分类删除时，历史记录的 category 自动改为「其他」，不会产生悬空值。
+    - 被记录引用的分类删除时，历史记录的 category 自动改为同类型的「其他」，不跨类型迁移。
     """
     cats = _load_categories()
-    if not any(c["name"] == name for c in cats):
+    target = next((c for c in cats if c["name"] == name), None)
+    if target is None:
         raise ValueError(f"分类「{name}」不存在")
     if name == PROTECTED_CATEGORY:
         raise ValueError(f"「{PROTECTED_CATEGORY}」是系统兜底分类，禁止删除")
-    if not any(c["name"] == PROTECTED_CATEGORY for c in cats):
-        raise ValueError(f"兜底分类「{PROTECTED_CATEGORY}」不存在，无法删除")
 
-    # 把引用该分类的记录迁移到「其他」
+    # 找同类型的兜底分类：支出→「其他」，收入→「其他收入」
+    fallback_name = PROTECTED_CATEGORY if target["type"] == "expense" else "其他收入"
+    fallback = next(
+        (c for c in cats if c["name"] == fallback_name and c["type"] == target["type"]),
+        None,
+    )
+    if fallback is None:
+        raise ValueError(f"没有{target['type']}类型的兜底分类「{fallback_name}」，无法删除")
+
+    # 把引用该分类的记录迁移到同类型兜底分类
     records = _load_records()
     migrated = 0
     for r in records:
         if r.get("category") == name:
-            r["category"] = PROTECTED_CATEGORY
+            r["category"] = fallback_name
             migrated += 1
     _save_records(records)
 
