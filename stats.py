@@ -113,7 +113,10 @@ def filter_records(records, date_from="", date_to="", category="",
     max_dec = _to_decimal(amount_max) if amount_max not in (None, "") else None
 
     result = []
-    for rec in records:
+    for rec in records or []:
+        # 脏数据防护：跳过 None / 非字典元素，避免 .get 崩溃（回归 #18）
+        if not isinstance(rec, dict):
+            continue
         date = str(rec.get("date", ""))
         if date_from and date < date_from:
             continue
@@ -141,19 +144,23 @@ def summarize(records):
     """
     income = Decimal("0")
     expense = Decimal("0")
+    valid = 0
 
-    for rec in records:
+    for rec in records or []:
+        if not isinstance(rec, dict):
+            continue
         amount = _to_decimal(rec.get("amount", 0))
         if rec.get("type") == "income":
             income += amount
         else:
             expense += amount
+        valid += 1
 
     return {
         "income": _round_money(income),
         "expense": _round_money(expense),
         "balance": _round_money(income - expense),
-        "count": len(records),
+        "count": valid,
     }
 
 
@@ -165,7 +172,9 @@ def aggregate_by_category(records, rtype):
     :return: [{"category": str, "amount": float, "count": int}, ...]，金额降序
     """
     bucket = {}
-    for rec in records:
+    for rec in records or []:
+        if not isinstance(rec, dict):
+            continue
         if rec.get("type") != rtype:
             continue
         name = rec.get("category") or "其他"
@@ -203,6 +212,8 @@ def get_stats(date_from="", date_to="", category="", rtype="",
         records = _load_records()
     if categories is None:
         categories = _load_categories()
+    records = records or []
+    categories = categories or []
 
     filtered = filter_records(records, date_from, date_to, category,
                               rtype, amount_min, amount_max)
