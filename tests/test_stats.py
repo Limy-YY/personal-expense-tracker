@@ -156,10 +156,9 @@ class TestGetStats(unittest.TestCase):
         self.assertEqual(r["filters"]["date_from"], "2026-11-01")
         self.assertEqual(r["filters"]["type"], "income")
 
-    @unittest.expectedFailure
     def test_all_records_missing_fields(self):
-        """回归用例（issue #18）：records 混入 None 应跳过不崩。
-        演示前 #3 已修复，重构时丢失；E 修复后移除 @unittest.expectedFailure。"""
+        """回归用例（issue #18，已修复）：records 混入 None 跳过不崩。
+        E 的 f0dbff1 修复，装饰器已按约定移除。"""
         r = stats.get_stats(records=[{"id": "x"}, {}, None])
         self.assertEqual(r["total"], 2)
 
