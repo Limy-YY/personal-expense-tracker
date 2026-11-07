@@ -32,7 +32,7 @@
   <article class="card">
     <div class="card-head">
       <h2>最近记录</h2>
-      <a class="link" href="{{ url_for('records') }}">查看全部</a>
+      <a class="link" href="{{ '/records' }}">查看全部</a>
     </div>
 
     {% if recent %}
@@ -81,15 +81,15 @@
       <span>记录一笔收支</span>
       <small>日期、金额、类别、备注</small>
     </a>
-    <a class="quick-link" href="{{ url_for('records') }}">
+    <a class="quick-link" href="{{ '/records' }}">
       <span>查看明细</span>
       <small>筛选、编辑与删除记录</small>
     </a>
-    <a class="quick-link" href="{{ url_for('stats') }}">
+    <a class="quick-link" href="/stats">
       <span>收支统计</span>
       <small>按日期、类别汇总并查看图表</small>
     </a>
-    <a class="quick-link" href="{{ url_for('categories') }}">
+    <a class="quick-link" href="/categories">
       <span>管理分类</span>
       <small>新增类别与颜色</small>
     </a>

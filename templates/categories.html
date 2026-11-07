@@ -16,7 +16,7 @@
       <h2>新增类别</h2>
     </div>
 
-    <form class="form" method="post" action="{{ url_for('categories') }}" data-validate>
+    <form class="form" method="post" action="/categories" data-validate>
       <div class="field">
         <label for="name">名称</label>
         <input id="name" name="name" type="text" maxlength="20" placeholder="如：餐饮" required>
@@ -78,7 +78,7 @@
                 <td class="num">{{ category.count }}</td>
                 <td class="actions">
                   {% if category.count == 0 %}
-                    <form class="inline-form" method="post" action="{{ url_for('category_delete', name=category.name) }}" data-confirm="确定删除分类「{{ category.name }}」吗？">
+                    <form class="inline-form" method="post" action="/api/categories/{{ category.name }}" data-confirm="确定删除分类「{{ category.name }}」吗？">
                       <button class="btn btn-sm btn-danger-ghost" type="submit">删除</button>
                     </form>
                   {% else %}

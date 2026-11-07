@@ -11,7 +11,7 @@
 <body>
   <header class="topbar">
     <div class="topbar-inner">
-      <a class="brand" href="{{ url_for('index') }}">
+      <a class="brand" href="/">
         <span class="brand-mark">账</span>
         <span class="brand-text">个人记账本</span>
       </a>
@@ -21,11 +21,11 @@
       </button>
 
       <nav class="nav" data-nav>
-        <a class="nav-link {{ 'active' if active == 'index' }}" href="{{ url_for('index') }}">首页</a>
-        <a class="nav-link {{ 'active' if active == 'new' }}" href="{{ url_for('record_new') }}">记一笔</a>
-        <a class="nav-link {{ 'active' if active == 'records' }}" href="{{ url_for('records') }}">明细</a>
-        <a class="nav-link {{ 'active' if active == 'stats' }}" href="{{ url_for('stats') }}">统计</a>
-        <a class="nav-link {{ 'active' if active == 'categories' }}" href="{{ url_for('categories') }}">分类</a>
+        <a class="nav-link {{ 'active' if active == 'index' }}" href="/">首页</a>
+        <a class="nav-link {{ 'active' if active == 'new' }}" href="/add">记一笔</a>
+        <a class="nav-link {{ 'active' if active == 'records' }}" href="/records">明细</a>
+        <a class="nav-link {{ 'active' if active == 'stats' }}" href="/stats">统计</a>
+        <a class="nav-link {{ 'active' if active == 'categories' }}" href="/categories">分类</a>
       </nav>
     </div>
   </header>

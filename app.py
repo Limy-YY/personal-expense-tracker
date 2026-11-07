@@ -6,7 +6,9 @@ from flask import Flask, redirect, render_template, request
 from record_add import record_add_bp as record_bp    # 成员C：记账录入
 from record_list import bp as list_bp     # 成员D：记录查看
 from stats import bp as stats_bp, get_stats, money, type_label  # 成员E：统计
-from category import bp as category_bp    # 成员F：分类管理
+from category import bp as category_bp, init_categories    # 成员F：分类管理
+
+init_categories()   # 确保 data/categories.json 存在（默认分类），否则类别校验全拒（J 补，issue #12）
 from export import bp as export_bp        # 成员A：数据导出
 
 app = Flask(__name__)
@@ -43,6 +45,13 @@ def stats_page():
         filters=args,
     )
     return render_template("stats.html", **view)
+
+
+@app.route("/categories")
+def categories_page():
+    """分类管理页：渲染 H 的 categories.html（F 只提供 API，页面视图由入口补齐）。"""
+    from category import list_categories
+    return render_template("categories.html", categories=list_categories())
 
 
 if __name__ == "__main__":
