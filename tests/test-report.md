@@ -15,7 +15,7 @@
 | record_add.py 录入 | C | 10 | 8 | 2 | ⚠️ BUG-2/3 待修（均有兜底，不损坏数据） |
 | ui（H）| H | 静态检查 | — | 1 | ⚠️ 模板契约不一致（issue #8），A 二选一裁决 |
 | query.py 筛选搜索 | G | 26 | 26 | 0 | ✅ 标杆级：容错、稳定分页、防误设计全做了 |
-| record_list.py 查看 | D | — | — | — | ⬜ 分支已出现，测试中 |
+| record_list.py 查看 | D | 34（D 自写） | 34 | 0 | ✅ J 抽查用例质量合格：边界/非法输入/排序覆盖完整 |
 | 集成联调 | A | — | — | — | ❌ **缺口：main 缺 storage.py，录入页当前为"假成功"** |
 
 ## 二、发现的问题
@@ -42,7 +42,7 @@
 
 1. **前后端日期校验规则不一致**：C 的 strptime 接受 `2026-11-7`（非补零），B 的严格校验拒绝 → 用户看到"系统错误"而非格式提示。建议 C 改用与 B 相同的 `date.fromisoformat` + 往返比较。
 2. **type 非法的记录会被 stats 计入支出**：B/C 校验后正常流程不会产生，行为需全组知晓。
-3. **两套数据文件结构并存**：B 用 `data/records.json`（顶层数组），F/E 用根目录 `data.json`（含 records+categories 的对象）。**B 合入后此冲突立即生效**，必须由 A 统一（建议：storage 升级为管整个 data.json，或 F/E 改调 storage 接口）。测试按"谁先合入谁占位、以 A 的裁决为准"跟踪。
+3. **数据层统一进展（当前最大集成风险）**：F 已重构 category.py 为 `data/categories.json` + `data/records.json`，与 B 的存储层对齐，早期冲突解除。**但 main 上的 stats.py（E）和 query.py（G）仍读根目录 `data.json`**——同一 main 里现存两套读法，A 必须让 E/G 改到 `data/` 目录，否则统计页和搜索页永远查不到新记的账。另外 main 仍缺 storage.py（issue #7）与 app.py。
 4. **stats.py 的 `records` 注入参数与 storage.py 的副本返回设计好评**，模块边界清晰。
 
 - **严重级别**：中（触发条件为数据文件被手动编辑或上游写入异常，但一旦触发整个统计页白屏）
