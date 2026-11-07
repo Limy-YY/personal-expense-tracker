@@ -1,6 +1,7 @@
 # record_add.py
 from flask import Blueprint, request, render_template, redirect, url_for, flash
 import datetime
+import math # 修复 BUG-2: 引入 math 模块
 import json
 
 # 创建蓝图，提供给成员A在 app.py 中注册集成
@@ -9,7 +10,7 @@ record_add_bp = Blueprint('record_add', __name__)
 @record_add_bp.route('/add', methods=['GET', 'POST'])
 def add():
     if request.method == 'POST':
-        # 1. 接收前端表单数据 (包含对接成员B的 account 字段)
+        # 1. 接收前端表单数据
         record_type = request.form.get('type')
         date_str = request.form.get('date')
         amount_str = request.form.get('amount')
@@ -30,22 +31,35 @@ def add():
             flash('提交失败：非法的收支类型！', 'error')
             return redirect(url_for('record_add.add'))
 
-        # (3) 日期格式校验
+        # (3) 日期格式校验 (修复观察项1：对齐成员B的严格校验)
         try:
-            datetime.datetime.strptime(date_str, '%Y-%m-%d')
+            # fromisoformat 严格要求 YYYY-MM-DD 格式，不允许单数日不补零
+            datetime.date.fromisoformat(date_str)
         except ValueError:
-            flash('提交失败：日期格式错误，应为 YYYY-MM-DD！', 'error')
+            flash('提交失败：日期格式错误，必须为严格的 YYYY-MM-DD 格式！', 'error')
             return redirect(url_for('record_add.add'))
 
-        # (4) 金额格式与大小校验
+        # (4) 金额格式与大小校验 (修复 BUG-2: 防御 NaN 注入)
         try:
             amount = float(amount_str)
-            if amount <= 0:
-                flash('提交失败：金额必须大于 0！', 'error')
+            # 使用 math.isfinite 拦截 NaN 和 Inf
+            if not math.isfinite(amount) or amount <= 0:
+                flash('提交失败：金额无效，必须是大于 0 的有效数字！', 'error')
                 return redirect(url_for('record_add.add'))
         except ValueError:
             flash('提交失败：金额必须是有效的数字！', 'error')
             return redirect(url_for('record_add.add'))
+
+        # (5) 类别合法性校验 (修复 BUG-3: 确保类别存在)
+        try:
+            from category import list_categories
+            valid_categories = [cat['name'] for cat in list_categories()]
+            if category not in valid_categories:
+                flash(f'提交失败：选择的类别"{category}"不存在或不合法！', 'error')
+                return redirect(url_for('record_add.add'))
+        except ImportError:
+            # 独立测试兜底：如果没有 category 模块，则跳过严格校验
+            pass
 
         # ==========================================
         # 3. 构造数据并调用成员B的存储接口
@@ -53,24 +67,19 @@ def add():
         new_record = {
             "type": record_type,
             "date": date_str,
-            "amount": round(amount, 2),  # 强制保留两位小数
+            "amount": round(amount, 2),
             "category": category,
             "account": account,          
             "note": note
         }
 
         try:
-            # 联调时调用成员B的接口
             from storage import add_record
             add_record(new_record)
             flash('记账成功！', 'success')
-            
-            # TODO: 成员D列表页写好后，改为跳转到列表页
-            # return redirect(url_for('record_list.list_records'))
             return redirect(url_for('record_add.add'))
             
         except ImportError:
-            # 兼容：如果成员B的代码还没就绪，先模拟成功防止崩溃
             flash(f'[独立测试] 记账成功！{date_str} / {category} / {amount}元 (账户: {account})', 'success')
             return redirect(url_for('record_add.add'))
         except Exception as e:
@@ -81,11 +90,9 @@ def add():
     # GET 请求：渲染录入页面并对接成员F的分类
     # ==========================================
     try:
-        # 联调时调用成员F的真实接口
         from category import list_categories
         categories = list_categories()
     except ImportError:
-        # 兼容：如果成员F的代码还没就绪，使用带 icon 的模拟数据
         categories = [
             {"name": "饮食", "type": "expense", "icon": "🍜"},
             {"name": "交通", "type": "expense", "icon": "🚌"},
