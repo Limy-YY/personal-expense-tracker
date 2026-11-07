@@ -18,7 +18,7 @@
 
 ## 二、发现的问题
 
-### BUG-2（编号 C-07）：NaN 金额绕过 C 的校验，用户看到"系统错误" —— 待 C 修复
+### BUG-2（编号 C-07，issue #5）：NaN 金额绕过 C 的校验，用户看到"系统错误" —— 待 C 修复
 
 - **严重级别**：低（数据不会损坏——B 兜底拒绝了，但报错误导用户）
 - **位置**：`record_add.py` 第 41-48 行金额校验
@@ -26,13 +26,13 @@
 - **复现**：录入页金额填 `nan` 提交 → 提示"系统错误：数据保存失败"，实际是 B 的 ValueError 被兜底 except 吃掉
 - **建议修法**：金额校验改为 `if not math.isfinite(amount) or amount <= 0:`（需 `import math`），给用户"金额无效"的明确提示
 
-### BUG-3（编号 C-05）：类别不校验存在性，脏分类名照存 —— 待 C 修复（或 A 定策略）
+### BUG-3（编号 C-05，issue #6）：类别不校验存在性，脏分类名照存 —— 待 C 修复（或 A 定策略）
 
 - **严重级别**：中（脏数据入库后，统计页按类别聚合会出现孤立类别，饼图错乱）
 - **复现**：录入页 category 填"不存在的分类"（或前端篡改表单）→ 记账成功，脏分类入库
 - **建议修法**：C 在 POST 校验段调 `category.list_categories()` 取名字集合，`category not in 名字集合` 即 flash 拒绝（GET 已经调了 F 的接口，顺手的事）
 
-### 集成缺口（A 处理）：main 上录入页是"假成功"
+### 集成缺口（A 处理，issue #7）：main 上录入页是"假成功"
 
 `record_add.py` POST 成功路径 `from storage import add_record`，但 **main 分支还没有 storage.py**（B 的代码在 feature/storage 未合）。当前 main 上提交表单会走 `except ImportError` 分支，显示"[独立测试] 记账成功"——**用户以为记上了，数据实际没存**。B 的模块 26/26 全过、随时可合，建议 A 立即合并 `feature/storage`。
 
