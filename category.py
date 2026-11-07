@@ -50,6 +50,8 @@ VALID_TYPES = ("expense", "income")
 HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 # 分类名禁止出现 URL 路由特殊字符，否则 /api/categories/<name> 匹配不到
 NAME_BAD_CHARS = re.compile(r"[/?#&=]")
+# 兜底分类：受保护不可删除，删除其他分类时历史记录自动迁移到这里
+PROTECTED_CATEGORY = "其他"
 
 
 # ============ 数据读写（联调时改为调用成员B storage.py 的统一接口） ============
@@ -219,15 +221,30 @@ def update_category(old_name, new_name=None, color=None, budget=None, icon=None)
 
 
 def delete_category(name):
-    """删除分类；被任何记录引用时拒绝删除，提示先把记录改到「其他」。"""
+    """
+    删除分类（方案②：自动迁移到兜底分类「其他」）。
+    - 「其他」是受保护兜底分类，禁止删除；
+    - 被记录引用的分类删除时，历史记录的 category 自动改为「其他」，不会产生悬空值。
+    """
     data = _load_data()
     if not any(c["name"] == name for c in data["categories"]):
         raise ValueError(f"分类「{name}」不存在")
-    used = [r for r in data["records"] if r.get("category") == name]
-    if used:
-        raise ValueError(f"分类「{name}」被 {len(used)} 条记录使用，请先把这些记录改到其他分类")
+    if name == PROTECTED_CATEGORY:
+        raise ValueError(f"「{PROTECTED_CATEGORY}」是系统兜底分类，禁止删除")
+    # 确认兜底分类存在，否则迁移无目标
+    if not any(c["name"] == PROTECTED_CATEGORY for c in data["categories"]):
+        raise ValueError(f"兜底分类「{PROTECTED_CATEGORY}」不存在，无法删除")
+
+    # 把引用该分类的记录迁移到「其他」
+    migrated = 0
+    for r in data["records"]:
+        if r.get("category") == name:
+            r["category"] = PROTECTED_CATEGORY
+            migrated += 1
+
     data["categories"] = [c for c in data["categories"] if c["name"] != name]
     _save_data(data)
+    return {"migrated_records": migrated}
 
 
 # ============ Flask 蓝图（给组长A集成到 app.py） ============
@@ -331,8 +348,26 @@ if __name__ == "__main__":
         except ValueError as e:
             print("预期报错：", e)
 
-        print("\n=== 清理测试数据 ===")
-        delete_category("宠物")
-        print("剩余分类数：", len(list_categories()))
+        print("\n=== 测试：删除兜底分类「其他」应报错 ===")
+        try:
+            delete_category("其他")
+        except ValueError as e:
+            print("预期报错：", e)
+
+        print("\n=== 测试：删除有记录引用的分类，记录自动迁移到「其他」 ===")
+        # 手动塞两条引用"宠物"的记录
+        data = _load_data()
+        data["records"] = [
+            {"id": "r1", "type": "expense", "date": "2026-11-07", "amount": 100, "category": "宠物", "note": "猫粮"},
+            {"id": "r2", "type": "expense", "date": "2026-11-07", "amount": 50, "category": "交通", "note": "打车"},
+        ]
+        _save_data(data)
+        result = delete_category("宠物")
+        print("删除结果：", result)
+        data = _load_data()
+        print("迁移后记录：", data["records"])
+
+        print("\n=== 最终分类数 ===")
+        print(len(list_categories()))
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
