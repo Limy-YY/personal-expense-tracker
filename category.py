@@ -26,6 +26,13 @@ try:
 except ImportError:
     _HAS_FLASK = False
 
+# storage 是成员B的存储模块；自测时没装也能跑业务函数。
+try:
+    from storage import load_records, update_record
+    _HAS_STORAGE = True
+except ImportError:
+    _HAS_STORAGE = False
+
 # ============ 配置 ============
 # 数据文件统一放在 data/ 目录（与成员B的 records.json 同目录）
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
@@ -95,9 +102,12 @@ def _save_categories(cats):
 
 
 def _load_records():
-    """读取 records（用于改名/删除时联动）；文件不存在返回空 list。
-    损坏时抛 RuntimeError，不静默返回空列表，防止删除分类时漏迁移记录。
+    """读取 records（用于改名/删除时联动）。
+    优先调用成员B的 storage.load_records()；自测时无 storage 则回退读文件。
     """
+    if _HAS_STORAGE:
+        return load_records()
+    # 回退：自测用，直接读文件
     if not os.path.exists(RECORDS_FILE):
         return []
     try:
@@ -115,10 +125,23 @@ def _load_records():
     return records
 
 
-def _save_records(records):
-    os.makedirs(DATA_DIR, exist_ok=True)
-    with open(RECORDS_FILE, "w", encoding="utf-8") as f:
-        json.dump(records, f, ensure_ascii=False, indent=2)
+def _migrate_records_category(old_name, new_name):
+    """批量把 category=old_name 的记录改成 new_name，通过 storage.update_record 逐条更新。"""
+    records = _load_records()
+    migrated = 0
+    for r in records:
+        if r.get("category") == old_name:
+            if _HAS_STORAGE:
+                update_record(r["id"], {"category": new_name})
+            else:
+                r["category"] = new_name
+            migrated += 1
+    # 自测回退：直接写文件
+    if not _HAS_STORAGE:
+        os.makedirs(DATA_DIR, exist_ok=True)
+        with open(RECORDS_FILE, "w", encoding="utf-8") as f:
+            json.dump(records, f, ensure_ascii=False, indent=2)
+    return migrated
 
 
 # ============ 业务函数 ============
@@ -202,12 +225,8 @@ def update_category(old_name, new_name=None, color=None, budget=None, icon=None)
         if new_name != old_name:
             if any(c["name"] == new_name for c in cats):
                 raise ValueError(f"分类「{new_name}」已存在")
-            # 联动 records：把历史记录里的旧分类名替换掉
-            records = _load_records()
-            for r in records:
-                if r.get("category") == old_name:
-                    r["category"] = new_name
-            _save_records(records)
+            # 联动 records：通过 storage 逐条更新，不直接写文件
+            _migrate_records_category(old_name, new_name)
             target["name"] = new_name
 
     # --- 改色：None=不改；空串=报错 ---
@@ -256,14 +275,8 @@ def delete_category(name):
     if fallback is None:
         raise ValueError(f"没有{target['type']}类型的兜底分类「{fallback_name}」，无法删除")
 
-    # 把引用该分类的记录迁移到同类型兜底分类
-    records = _load_records()
-    migrated = 0
-    for r in records:
-        if r.get("category") == name:
-            r["category"] = fallback_name
-            migrated += 1
-    _save_records(records)
+    # 把引用该分类的记录迁移到同类型兜底分类（通过 storage 逐条更新）
+    migrated = _migrate_records_category(name, fallback_name)
 
     cats = [c for c in cats if c["name"] != name]
     _save_categories(cats)
@@ -381,12 +394,14 @@ if __name__ == "__main__":
             print("预期报错：", e)
 
         print("\n=== 测试：删除有记录引用的分类，记录自动迁移到「其他支出」 ===")
-        # 手动塞两条引用"宠物"的记录
+        # 手动塞两条引用"宠物"的记录（自测时直接写文件）
         records = [
             {"id": "r1", "type": "expense", "date": "2026-11-07", "amount": 100, "category": "宠物", "note": "猫粮"},
             {"id": "r2", "type": "expense", "date": "2026-11-07", "amount": 50, "category": "交通", "note": "打车"},
         ]
-        _save_records(records)
+        os.makedirs(DATA_DIR, exist_ok=True)
+        with open(RECORDS_FILE, "w", encoding="utf-8") as f:
+            json.dump(records, f, ensure_ascii=False, indent=2)
         result = delete_category("宠物")
         print("删除结果：", result)
         print("迁移后记录：", _load_records())
