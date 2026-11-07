@@ -27,7 +27,10 @@ except ImportError:
     _HAS_FLASK = False
 
 # ============ 配置 ============
-DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data.json")
+# 数据文件统一放在 data/ 目录（与成员B的 records.json 同目录）
+DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+CATEGORIES_FILE = os.path.join(DATA_DIR, "categories.json")
+RECORDS_FILE = os.path.join(DATA_DIR, "records.json")
 
 # 默认分类（首次启动自动写入，幂等）
 # budget = 月度预算金额（元），仅支出类设置；收入类不设预算
@@ -46,82 +49,79 @@ DEFAULT_CATEGORIES = [
     {"name": "其他", "type": "expense", "color": "#9e9e9e", "budget": 200,  "icon": "📦"},
 ]
 
-VALID_TYPES = ("expense", "income")
-HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+VALID_TYPES = ("expense", "income")  # 校验 type，只能是支出/收入
+HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")  # 校验 6 位十六进制颜色码
 # 分类名禁止出现 URL 路由特殊字符，否则 /api/categories/<name> 匹配不到
-NAME_BAD_CHARS = re.compile(r"[/?#&=]")
+NAME_BAD_CHARS = re.compile(r"[/?#&=]")  # 检查名字里不能包含 / ? # & = 这些字符
 # 兜底分类：受保护不可删除，删除其他分类时历史记录自动迁移到这里
 PROTECTED_CATEGORY = "其他"
 
 
-# ============ 数据读写（联调时改为调用成员B storage.py 的统一接口） ============
-# TODO(联调): 把下面两个函数替换成 from storage import load_data / save_data
-#             其余业务函数不用动，保证模块独立可测。
-def _load_data():
-    """
-    读取整个 data.json。
-    - 文件不存在：返回空结构（首次启动）
-    - JSON 损坏 / 结构不对：抛 RuntimeError，不静默回退空结构，防止上层把坏文件覆盖成空数据。
-      （备份/恢复由成员 B 的 storage 层负责）
-    """
-    if not os.path.exists(DATA_FILE):
-        return {"records": [], "categories": []}
+# ============ 数据读写 ============
+# categories 存 data/categories.json；records 由成员B的 storage.py 管理在 data/records.json
+# 本模块只在改名/删除时读取 records 做联动，不负责 records 的 CRUD。
+
+def _load_categories():
+    """读取分类列表；文件不存在返回空 list。"""
+    if not os.path.exists(CATEGORIES_FILE):
+        return []
     try:
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
+        with open(CATEGORIES_FILE, "r", encoding="utf-8") as f:
+            cats = json.load(f)
     except json.JSONDecodeError as e:
-        raise RuntimeError(f"data.json 已损坏：{e}，请联系存储模块恢复备份") from e
+        raise RuntimeError(f"categories.json 已损坏：{e}") from e
     except OSError as e:
-        raise RuntimeError(f"data.json 读取失败：{e}") from e
-
-    # 顶层结构校验：必须是 dict，且 records/categories 必须是 list
-    if not isinstance(data, dict):
-        raise RuntimeError("data.json 顶层不是对象，结构异常")
-    if not isinstance(data.get("records"), list):
-        raise RuntimeError("data.json 中 records 不是数组，结构异常")
-    if not isinstance(data.get("categories"), list):
-        raise RuntimeError("data.json 中 categories 不是数组，结构异常")
-
-    # 元素级校验：分类必须是对象且含必要字段
-    for i, c in enumerate(data["categories"]):
+        raise RuntimeError(f"categories.json 读取失败：{e}") from e
+    if not isinstance(cats, list):
+        raise RuntimeError("categories.json 顶层不是数组")
+    # 元素级校验
+    for i, c in enumerate(cats):
         if not isinstance(c, dict):
-            raise RuntimeError(f"data.json 中 categories[{i}] 不是对象，结构异常")
+            raise RuntimeError(f"categories[{i}] 不是对象")
         if not isinstance(c.get("name"), str) or not c.get("name"):
-            raise RuntimeError(f"data.json 中 categories[{i}] 缺少合法 name 字段")
+            raise RuntimeError(f"categories[{i}] 缺少合法 name")
         if c.get("type") not in VALID_TYPES:
-            raise RuntimeError(f"data.json 中 categories[{i}] 的 type 非法")
+            raise RuntimeError(f"categories[{i}] 的 type 非法")
         if not isinstance(c.get("color"), str):
-            raise RuntimeError(f"data.json 中 categories[{i}] 缺少合法 color 字段")
-
-    for i, r in enumerate(data["records"]):
-        if not isinstance(r, dict):
-            raise RuntimeError(f"data.json 中 records[{i}] 不是对象，结构异常")
-
-    return data
+            raise RuntimeError(f"categories[{i}] 缺少合法 color")
+    return cats
 
 
-def _save_data(data):
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+def _save_categories(cats):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(CATEGORIES_FILE, "w", encoding="utf-8") as f:
+        json.dump(cats, f, ensure_ascii=False, indent=2)
+
+
+def _load_records():
+    """读取 records（用于改名/删除时联动）；文件不存在返回空 list。"""
+    if not os.path.exists(RECORDS_FILE):
+        return []
+    try:
+        with open(RECORDS_FILE, "r", encoding="utf-8") as f:
+            records = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return []
+    return records if isinstance(records, list) else []
+
+
+def _save_records(records):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(RECORDS_FILE, "w", encoding="utf-8") as f:
+        json.dump(records, f, ensure_ascii=False, indent=2)
 
 
 # ============ 业务函数 ============
 def init_categories():
     """首次启动：若 categories 为空则写入默认分类。可重复调用。"""
-    data = _load_data()
-    if not data["categories"]:
-        data["categories"] = [dict(c) for c in DEFAULT_CATEGORIES]
-        _save_data(data)
+    cats = _load_categories()
+    if not cats:
+        _save_categories([dict(c) for c in DEFAULT_CATEGORIES])
 
 
 def list_categories(c_type=None):
-    """
-    列出分类。
-    :param c_type: None=全部；'expense'=只返回支出类；'income'=只返回收入类
-    :return: list[dict]
-    """
-    data = _load_data()
-    cats = data["categories"]
+    """列出分类；c_type=None=全部，'expense'/'income' 按收支类型筛选。"""
+    cats = _load_categories()
     if c_type:
         cats = [c for c in cats if c["type"] == c_type]
     return cats
@@ -155,16 +155,16 @@ def add_category(name, c_type, color, budget=None, icon=None):
         raise ValueError("分类名称必须是字符串")
     name = name.strip()
     _validate(name, c_type, color, budget, icon)
-    data = _load_data()
-    if any(c["name"] == name for c in data["categories"]):
+    cats = _load_categories()
+    if any(c["name"] == name for c in cats):
         raise ValueError(f"分类「{name}」已存在")
     cat = {"name": name, "type": c_type, "color": color}
     if budget is not None:
         cat["budget"] = budget
     if icon:
         cat["icon"] = icon
-    data["categories"].append(cat)
-    _save_data(data)
+    cats.append(cat)
+    _save_categories(cats)
     return cat
 
 
@@ -172,11 +172,11 @@ def update_category(old_name, new_name=None, color=None, budget=None, icon=None)
     """
     修改分类：可改名、可改色、可改预算、可改图标。
     - 参数传 None 表示不修改该字段；
-    - 传空字符串/空值视为非法输入，返回校验错误（与新增规则一致）。
+    - 传空字符串/空值视为非法输入，返回校验错误。
     若改名，会同步把 records 里所有引用 old_name 的记录改成 new_name。
     """
-    data = _load_data()
-    target = next((c for c in data["categories"] if c["name"] == old_name), None)
+    cats = _load_categories()
+    target = next((c for c in cats if c["name"] == old_name), None)
     if target is None:
         raise ValueError(f"分类「{old_name}」不存在")
 
@@ -188,12 +188,14 @@ def update_category(old_name, new_name=None, color=None, budget=None, icon=None)
         if NAME_BAD_CHARS.search(new_name):
             raise ValueError("分类名称不能包含 / ? # & = 等特殊字符")
         if new_name != old_name:
-            if any(c["name"] == new_name for c in data["categories"]):
+            if any(c["name"] == new_name for c in cats):
                 raise ValueError(f"分类「{new_name}」已存在")
             # 联动 records：把历史记录里的旧分类名替换掉
-            for r in data["records"]:
+            records = _load_records()
+            for r in records:
                 if r.get("category") == old_name:
                     r["category"] = new_name
+            _save_records(records)
             target["name"] = new_name
 
     # --- 改色：None=不改；空串=报错 ---
@@ -216,7 +218,7 @@ def update_category(old_name, new_name=None, color=None, budget=None, icon=None)
             raise ValueError("icon 必须是字符串（emoji）")
         target["icon"] = icon
 
-    _save_data(data)
+    _save_categories(cats)
     return target
 
 
@@ -226,24 +228,25 @@ def delete_category(name):
     - 「其他」是受保护兜底分类，禁止删除；
     - 被记录引用的分类删除时，历史记录的 category 自动改为「其他」，不会产生悬空值。
     """
-    data = _load_data()
-    if not any(c["name"] == name for c in data["categories"]):
+    cats = _load_categories()
+    if not any(c["name"] == name for c in cats):
         raise ValueError(f"分类「{name}」不存在")
     if name == PROTECTED_CATEGORY:
         raise ValueError(f"「{PROTECTED_CATEGORY}」是系统兜底分类，禁止删除")
-    # 确认兜底分类存在，否则迁移无目标
-    if not any(c["name"] == PROTECTED_CATEGORY for c in data["categories"]):
+    if not any(c["name"] == PROTECTED_CATEGORY for c in cats):
         raise ValueError(f"兜底分类「{PROTECTED_CATEGORY}」不存在，无法删除")
 
     # 把引用该分类的记录迁移到「其他」
+    records = _load_records()
     migrated = 0
-    for r in data["records"]:
+    for r in records:
         if r.get("category") == name:
             r["category"] = PROTECTED_CATEGORY
             migrated += 1
+    _save_records(records)
 
-    data["categories"] = [c for c in data["categories"] if c["name"] != name]
-    _save_data(data)
+    cats = [c for c in cats if c["name"] != name]
+    _save_categories(cats)
     return {"migrated_records": migrated}
 
 
@@ -304,13 +307,16 @@ else:
 
 
 # ============ 自测：直接 python category.py 即可跑 ============
-# 使用临时目录，绝不触碰真实 data.json
+# 使用临时目录，绝不触碰真实数据文件
 if __name__ == "__main__":
     import shutil
     import tempfile
 
     tmp_dir = tempfile.mkdtemp(prefix="category_test_")
-    DATA_FILE = os.path.join(tmp_dir, "data.json")
+    # 把数据文件指向临时目录
+    DATA_DIR = os.path.join(tmp_dir, "data")
+    CATEGORIES_FILE = os.path.join(DATA_DIR, "categories.json")
+    RECORDS_FILE = os.path.join(DATA_DIR, "records.json")
 
     try:
         init_categories()
@@ -356,16 +362,14 @@ if __name__ == "__main__":
 
         print("\n=== 测试：删除有记录引用的分类，记录自动迁移到「其他」 ===")
         # 手动塞两条引用"宠物"的记录
-        data = _load_data()
-        data["records"] = [
+        records = [
             {"id": "r1", "type": "expense", "date": "2026-11-07", "amount": 100, "category": "宠物", "note": "猫粮"},
             {"id": "r2", "type": "expense", "date": "2026-11-07", "amount": 50, "category": "交通", "note": "打车"},
         ]
-        _save_data(data)
+        _save_records(records)
         result = delete_category("宠物")
         print("删除结果：", result)
-        data = _load_data()
-        print("迁移后记录：", data["records"])
+        print("迁移后记录：", _load_records())
 
         print("\n=== 最终分类数 ===")
         print(len(list_categories()))
