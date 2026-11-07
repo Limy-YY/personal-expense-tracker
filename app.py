@@ -49,10 +49,23 @@ def stats_page():
     return render_template("stats.html", **view)
 
 
-@app.route("/categories")
+@app.route("/categories", methods=["GET", "POST"])
 def categories_page():
-    """分类管理页：渲染 H 的 categories.html（F 只提供 API，页面视图由入口补齐）。"""
-    from category import list_categories
+    """分类管理页：渲染 H 的 categories.html（F 只提供 API，页面视图由入口补齐）。
+    POST 为表单提交新增类别（J 补，修复添加后 405 不跳转）。"""
+    from category import list_categories, add_category
+    from flask import flash
+    if request.method == "POST":
+        try:
+            add_category(
+                request.form.get("name", "").strip(),
+                request.form.get("type", "expense").strip(),
+                request.form.get("color", "#4f46e5").strip(),
+            )
+            flash("添加成功", "success")
+        except (ValueError, TypeError) as e:
+            flash(f"添加失败：{e}", "error")
+        return redirect("/categories")
     return render_template("categories.html", categories=list_categories())
 
 
