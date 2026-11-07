@@ -1,24 +1,109 @@
-{% extends "base.html" %} {% block content %}
-收支统计
-{# ===== 筛选表单：GET 提交到 /stats，由 app.py 调用 stats.get_stats ===== #}
-日期起 
- 年 /月/日
- 日期止 
- 年 /月/日
- 类别 
-全部类别
- 类型 
-全部
- 最小金额 
- 最大金额 
- 查询
-{# ===== 汇总卡片：对应 stats.summarize 的返回字段 ===== #}
-总收入 ￥{{ "%.2f"|format(stats.summary.total_income) }}
-总支出 ￥{{ "%.2f"|format(stats.summary.total_expense) }}
-结余 ￥{{ "%.2f"|format(stats.summary.balance) }}
-笔数 {{ stats.summary.count }} 笔
-{# ===== 图表容器：画布由成员I 的 static/js/charts.js 绘制 ===== #}
-支出分类占比
-收入分类
-月度收支趋势
-{# ===== 把统计数据交给 charts.js（成员I 负责绘图，这里只负责注入数据） ===== #} {% endblock %}
+{% extends "base.html" %}
+
+{% block title %}统计{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>收支统计</h1>
+    <p class="page-sub">当前条件下共 {{ total }} 笔记录，可按日期、类型和类别筛选。</p>
+  </div>
+  <a class="btn btn-ghost" href="{{ url_for('stats') }}">重置统计</a>
+</div>
+
+<form class="filter-bar card" method="get" action="{{ url_for('stats') }}">
+  <div class="filter-grid">
+    <label>类型
+      <select name="type">
+        <option value="">全部</option>
+        <option value="expense" {{ 'selected' if filters.get('type') == 'expense' }}>支出</option>
+        <option value="income" {{ 'selected' if filters.get('type') == 'income' }}>收入</option>
+      </select>
+    </label>
+
+    <label>类别
+      <select name="category">
+        <option value="">全部</option>
+        {% for category in categories %}
+          <option value="{{ category.name }}" {{ 'selected' if filters.get('category') == category.name }}>{{ category.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label>开始日期
+      <input type="date" name="start" value="{{ filters.get('start', '') }}">
+    </label>
+
+    <label>结束日期
+      <input type="date" name="end" value="{{ filters.get('end', '') }}">
+    </label>
+
+    <label class="filter-keyword">关键字
+      <input type="search" name="q" value="{{ filters.get('q', '') }}" placeholder="备注或类别">
+    </label>
+
+    <div class="filter-actions">
+      <button class="btn btn-primary" type="submit">统计</button>
+      <a class="btn btn-ghost" href="{{ url_for('stats') }}">重置</a>
+    </div>
+  </div>
+</form>
+
+<section class="stats-grid">
+  <article class="stat-card stat-income">
+    <span class="stat-label">总收入</span>
+    <strong class="stat-value">¥{{ summary.income | money }}</strong>
+  </article>
+  <article class="stat-card stat-expense">
+    <span class="stat-label">总支出</span>
+    <strong class="stat-value">¥{{ summary.expense | money }}</strong>
+  </article>
+  <article class="stat-card stat-balance">
+    <span class="stat-label">结余</span>
+    <strong class="stat-value {{ 'text-expense' if summary.balance < 0 }}">
+      {{ '-' if summary.balance < 0 }}¥{{ summary.balance | abs | money }}
+    </strong>
+  </article>
+</section>
+
+<section class="card">
+  <div class="card-head">
+    <h2>分类明细</h2>
+    <span class="muted small">占比按同类型总额计算</span>
+  </div>
+
+  {% if category_rows %}
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>类别</th>
+            <th>类型</th>
+            <th class="num">金额</th>
+            <th class="num">占比</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in category_rows %}
+            <tr>
+              <td>
+                <span class="chip">
+                  <i class="dot" style="background: {{ row.color }}"></i>
+                  {{ row.name }}
+                </span>
+              </td>
+              <td><span class="badge badge-{{ row.type }}">{{ row.type | type_label }}</span></td>
+              <td class="num">¥{{ row.amount | money }}</td>
+              <td class="num">{{ row.percent ~ '%' if row.percent is not none else '—' }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty">
+      <p>当前筛选条件下没有数据。</p>
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

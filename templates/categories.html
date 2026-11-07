@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}分类{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>分类管理</h1>
+    <p class="page-sub">维护收支类别与颜色，图表会自动使用这些颜色。</p>
+  </div>
+</div>
+
+<section class="two-col">
+  <article class="card">
+    <div class="card-head">
+      <h2>新增类别</h2>
+    </div>
+
+    <form class="form" method="post" action="{{ url_for('categories') }}" data-validate>
+      <div class="field">
+        <label for="name">名称</label>
+        <input id="name" name="name" type="text" maxlength="20" placeholder="如：餐饮" required>
+        <p class="field-error" data-error-for="name"></p>
+      </div>
+
+      <div class="field">
+        <span class="field-label">类型</span>
+        <div class="segmented" data-segmented>
+          <label class="segment is-active">
+            <input type="radio" name="type" value="expense" checked>
+            <span>支出</span>
+          </label>
+          <label class="segment">
+            <input type="radio" name="type" value="income">
+            <span>收入</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="color">颜色</label>
+        <input id="color" name="color" type="color" value="#4f46e5">
+      </div>
+
+      <div class="form-actions">
+        <button class="btn btn-primary" type="submit">添加类别</button>
+      </div>
+    </form>
+  </article>
+
+  <article class="card">
+    <div class="card-head">
+      <h2>已有类别</h2>
+      <span class="muted small">{{ categories | length }} 个</span>
+    </div>
+
+    {% if categories %}
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>类别</th>
+              <th>类型</th>
+              <th class="num">使用次数</th>
+              <th class="actions">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for category in categories %}
+              <tr>
+                <td>
+                  <span class="chip">
+                    <i class="dot" style="background: {{ category.color }}"></i>
+                    {{ category.name }}
+                  </span>
+                </td>
+                <td><span class="badge badge-{{ category.type }}">{{ category.type | type_label }}</span></td>
+                <td class="num">{{ category.count }}</td>
+                <td class="actions">
+                  {% if category.count == 0 %}
+                    <form class="inline-form" method="post" action="{{ url_for('category_delete', name=category.name) }}" data-confirm="确定删除分类「{{ category.name }}」吗？">
+                      <button class="btn btn-sm btn-danger-ghost" type="submit">删除</button>
+                    </form>
+                  {% else %}
+                    <span class="muted small">使用中</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="empty">
+        <p>还没有类别，先添加一个吧。</p>
+      </div>
+    {% endif %}
+  </article>
+</section>
+{% endblock %}
