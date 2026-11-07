@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}首页{% endblock %} · 个人记账本</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/layout.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="/">
+        <span class="brand-mark">账</span>
+        <span class="brand-text">个人记账本</span>
+      </a>
+
+      <button class="nav-toggle" type="button" data-nav-toggle aria-label="展开导航" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+
+      <nav class="nav" data-nav>
+        <a class="nav-link {{ 'active' if active == 'index' }}" href="/">首页</a>
+        <a class="nav-link {{ 'active' if active == 'new' }}" href="/add">记一笔</a>
+        <a class="nav-link {{ 'active' if active == 'records' }}" href="/records">明细</a>
+        <a class="nav-link {{ 'active' if active == 'stats' }}" href="/stats">统计</a>
+        <a class="nav-link {{ 'active' if active == 'categories' }}" href="/categories">分类</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="page">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-stack" aria-live="polite">
+          {% for category, message in messages %}
+            <div class="flash flash-{{ category }}" role="status">
+              <span>{{ message }}</span>
+              <button type="button" class="flash-close" data-dismiss aria-label="关闭">&times;</button>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </main>
+
+  <div class="modal-backdrop" id="confirm-modal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+      <h3 id="confirm-title">确认删除</h3>
+      <p id="confirm-message">确定要删除吗？该操作不可撤销。</p>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" data-modal-cancel>取消</button>
+        <button type="button" class="btn btn-danger" data-modal-confirm>确认删除</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/ui.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}首页{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>收支概览</h1>
+    <p class="page-sub">共 {{ total }} 笔记录，最近一笔收支一目了然。</p>
+  </div>
+  <a class="btn btn-primary" href="{{ url_for('record_new') }}">记一笔</a>
+</div>
+
+<section class="stats-grid">
+  <article class="stat-card stat-income">
+    <span class="stat-label">总收入</span>
+    <strong class="stat-value">¥{{ summary.income | money }}</strong>
+  </article>
+  <article class="stat-card stat-expense">
+    <span class="stat-label">总支出</span>
+    <strong class="stat-value">¥{{ summary.expense | money }}</strong>
+  </article>
+  <article class="stat-card stat-balance">
+    <span class="stat-label">结余</span>
+    <strong class="stat-value {{ 'text-expense' if summary.balance < 0 }}">
+      {{ '-' if summary.balance < 0 }}¥{{ summary.balance | abs | money }}
+    </strong>
+  </article>
+</section>
+
+<section class="two-col">
+  <article class="card">
+    <div class="card-head">
+      <h2>最近记录</h2>
+      <a class="link" href="{{ '/records' }}">查看全部</a>
+    </div>
+
+    {% if recent %}
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>日期</th>
+              <th>类别</th>
+              <th>备注</th>
+              <th class="num">金额</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for record in recent %}
+              <tr>
+                <td>{{ record.date }}</td>
+                <td>
+                  <span class="chip">
+                    <i class="dot" style="background: {{ colors.get(record.category, '#94a3b8') }}"></i>
+                    {{ record.category }}
+                  </span>
+                </td>
+                <td class="muted">{{ record.note or '—' }}</td>
+                <td class="num {{ 'amount-income' if record.type == 'income' else 'amount-expense' }}">
+                  {{ '+' if record.type == 'income' else '-' }}¥{{ record.amount | money }}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="empty">
+        <p>还没有记录，先记下第一笔吧。</p>
+        <a class="btn btn-primary" href="{{ url_for('record_new') }}">去记账</a>
+      </div>
+    {% endif %}
+  </article>
+
+  <aside class="card quick-card">
+    <div class="card-head">
+      <h2>快捷入口</h2>
+    </div>
+    <a class="quick-link" href="{{ url_for('record_new') }}">
+      <span>记录一笔收支</span>
+      <small>日期、金额、类别、备注</small>
+    </a>
+    <a class="quick-link" href="{{ '/records' }}">
+      <span>查看明细</span>
+      <small>筛选、编辑与删除记录</small>
+    </a>
+    <a class="quick-link" href="/stats">
+      <span>收支统计</span>
+      <small>按日期、类别汇总并查看图表</small>
+    </a>
+    <a class="quick-link" href="/categories">
+      <span>管理分类</span>
+      <small>新增类别与颜色</small>
+    </a>
+  </aside>
+</section>
+{% endblock %}
