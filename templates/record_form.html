@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% set r_date = record.get('date', today) if record else today %}
+{% set r_type = record.get('type', 'expense') if record else 'expense' %}
+{% set r_amount = record.get('amount', '') if record else '' %}
+{% set r_category = record.get('category', '') if record else '' %}
+{% set r_note = record.get('note', '') if record else '' %}
+{% set form_action = url_for('record_edit', record_id=record_id) if mode == 'edit' else url_for('record_new') %}
+
+{% block title %}{{ '编辑记录' if mode == 'edit' else '记一笔' }}{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>{{ '编辑记录' if mode == 'edit' else '记一笔' }}</h1>
+    <p class="page-sub">填写日期、金额、类别和备注，保存后会立即纳入统计。</p>
+  </div>
+  <a class="btn btn-ghost" href="{{ url_for('records') }}">返回明细</a>
+</div>
+
+<form class="form card" method="post" action="{{ form_action }}" data-validate>
+  <div class="form-grid">
+    <div class="field">
+      <label for="date">日期</label>
+      <input type="date" id="date" name="date" value="{{ r_date }}" required>
+      <p class="field-error" data-error-for="date"></p>
+    </div>
+
+    <div class="field">
+      <span class="field-label">类型</span>
+      <div class="segmented" data-segmented>
+        <label class="segment {{ 'is-active' if r_type == 'expense' }}">
+          <input type="radio" name="type" value="expense" {{ 'checked' if r_type == 'expense' }}>
+          <span>支出</span>
+        </label>
+        <label class="segment {{ 'is-active' if r_type == 'income' }}">
+          <input type="radio" name="type" value="income" {{ 'checked' if r_type == 'income' }}>
+          <span>收入</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="amount">金额</label>
+      <div class="input-prefix">
+        <span>¥</span>
+        <input type="number" id="amount" name="amount" min="0.01" step="0.01" placeholder="0.00" value="{{ r_amount }}" required>
+      </div>
+      <p class="field-error" data-error-for="amount"></p>
+    </div>
+
+    <div class="field">
+      <span class="field-label">类别</span>
+      <select id="category-expense" name="category" data-category-type="expense" data-required="true" {{ 'hidden' if r_type != 'expense' }} {{ 'disabled' if r_type != 'expense' }}>
+        <option value="">请选择支出类别</option>
+        {% for category in categories if category.type == 'expense' %}
+          <option value="{{ category.name }}" {{ 'selected' if r_category == category.name }}>{{ category.name }}</option>
+        {% endfor %}
+      </select>
+      <select id="category-income" name="category" data-category-type="income" data-required="true" {{ 'hidden' if r_type != 'income' }} {{ 'disabled' if r_type != 'income' }}>
+        <option value="">请选择收入类别</option>
+        {% for category in categories if category.type == 'income' %}
+          <option value="{{ category.name }}" {{ 'selected' if r_category == category.name }}>{{ category.name }}</option>
+        {% endfor %}
+      </select>
+      <p class="field-error" data-error-for="category"></p>
+    </div>
+
+    <div class="field field-full">
+      <label for="note">备注</label>
+      <textarea id="note" name="note" rows="3" maxlength="120" placeholder="可选，最多 120 字">{{ r_note }}</textarea>
+    </div>
+  </div>
+
+  <div class="form-actions">
+    <a class="btn btn-ghost" href="{{ url_for('records') }}">取消</a>
+    <button class="btn btn-primary" type="submit">{{ '保存修改' if mode == 'edit' else '保存记录' }}</button>
+  </div>
+</form>
+{% endblock %}
