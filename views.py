@@ -182,6 +182,11 @@ def init_app(app):
             "today": date.today().isoformat(),
         }
 
+    @app.route("/index.html")
+    def index_html():
+        """兼容路径：应用卡预览/静态习惯会请求 /index.html，重定向到首页（J 补）"""
+        return redirect(url_for("index"))
+
     @app.route("/")
     def index():
         records = _load_records()
