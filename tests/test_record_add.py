@@ -65,13 +65,14 @@ class TestRecordAdd(RecordAddTestBase):
             self.assertIn(expect, resp.data.decode("utf-8"), msg=f"amount={bad}")
             self.assertEqual(storage.load_records(), [])
 
-    def test_c02_nan_bypasses_validation(self):
+    def test_c02_nan_rejected_friendly(self):
         """C-07 bug：float('nan') 绕过 C 的校验（nan<=0 为 False），
         最终由 B 兜底拒绝，但用户看到的是『系统错误』而非『金额无效』"""
         resp = self.post(amount="nan")
         text = resp.data.decode("utf-8")
-        self.assertIn("系统错误", text)          # 当前实际行为
-        self.assertEqual(storage.load_records(), [])  # 幸好没写进去
+        self.assertIn("金额无效", text)
+        self.assertNotIn("系统错误", text)
+        self.assertEqual(storage.load_records(), [])
 
     def test_c03_huge_amount_no_upper_limit(self):
         """C-03 超大金额：C 与 B 均未设上限，按实现接受（已与约定对齐）"""
@@ -87,19 +88,19 @@ class TestRecordAdd(RecordAddTestBase):
         self.assertIn("日期格式错误", resp.data.decode("utf-8"))
         self.assertEqual(storage.load_records(), [])
 
-    def test_c04_non_padded_date_inconsistent_with_b(self):
+    def test_c04_non_padded_date_now_rejected(self):
         """观察项：C 的 strptime 接受 '2026-11-7'，B 的校验拒绝它——
         结果是用户看到『系统错误』而非明确的日期格式提示（前后端校验规则不一致）"""
         resp = self.post(date="2026-11-7")
         text = resp.data.decode("utf-8")
-        self.assertIn("系统错误", text)
+        self.assertIn("日期格式错误", text)
         self.assertEqual(storage.load_records(), [])
 
-    def test_c05_unknown_category_saved_without_check(self):
+    def test_c05_unknown_category_rejected(self):
         """C-05 bug：类别不在分类列表中也照存不误——C 未对接 F 的分类校验"""
         resp = self.post(category="不存在的分类")
-        self.assertIn("记账成功", resp.data.decode("utf-8"))
-        self.assertEqual(len(storage.load_records()), 1)  # 脏分类名进了库
+        self.assertIn("不存在或不合法", resp.data.decode("utf-8"))
+        self.assertEqual(storage.load_records(), [])
 
     def test_c06_missing_type_rejected(self):
         """C-06 类型缺省：拒绝，不允许默认值混入"""

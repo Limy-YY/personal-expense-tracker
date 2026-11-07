@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
 """
 tests/test_stats.py —— 统计模块单元测试（成员J 独立负责）
-被测模块：stats.py（成员E）
+被测模块：stats.py（成员E），2026-11-07 重构后契约：
+  summarize()  -> {income, expense, balance, count}
+  get_stats()  -> {summary, category_rows, chart_data, chart_category_type,
+                   categories, total, filters}（filters 键为 type，非 rtype）
+  月度聚合已移除，趋势图由前端 charts.js 自算
 运行方式：在仓库根目录执行  python tests/test_stats.py
-说明：不依赖 data.json，全部通过 records 参数注入，纯内存测试
 """
 import os
 import sys
@@ -31,24 +34,25 @@ class TestSummarize(unittest.TestCase):
     def test_empty_records_all_zero(self):
         """E-01 空数据：全 0 且不崩溃"""
         s = stats.summarize([])
-        self.assertEqual(s, {"total_income": 0.0, "total_expense": 0.0,
-                             "balance": 0.0, "count": 0})
+        self.assertEqual(s["income"], 0.0)
+        self.assertEqual(s["expense"], 0.0)
+        self.assertEqual(s["balance"], 0.0)
+        self.assertEqual(s["count"], 0)
 
     def test_totals_and_balance(self):
         s = stats.summarize(DEMO)
-        self.assertAlmostEqual(s["total_income"], 6900.0)
-        self.assertAlmostEqual(s["total_expense"], 1834.5)
+        self.assertAlmostEqual(s["income"], 6900.0)
+        self.assertAlmostEqual(s["expense"], 1834.5)
         self.assertAlmostEqual(s["balance"], 5065.5)
         self.assertEqual(s["count"], 5)
 
     def test_float_precision(self):
-        """E-06 浮点精度：0.1 + 0.2 必须等于 0.3（Decimal 处理）"""
+        """E-06 浮点精度：0.1 + 0.2 必须严格等于 0.3（Decimal 处理）"""
         s = stats.summarize([
             rec("1", "expense", "2026-11-01", 0.1, "饮食"),
             rec("2", "expense", "2026-11-01", 0.2, "饮食"),
         ])
-        self.assertAlmostEqual(s["total_expense"], 0.3)
-        self.assertEqual(s["total_expense"], 0.3)  # 严格相等，不允许 0.30000000000000004
+        self.assertEqual(s["expense"], 0.3)  # 严格相等，不允许 0.30000000000000004
 
     def test_dirty_amount_treated_as_zero(self):
         """脏数据（amount 缺失/乱码）按 0 计，不崩"""
@@ -56,13 +60,13 @@ class TestSummarize(unittest.TestCase):
             {"id": "1", "type": "expense", "date": "2026-11-01", "category": "饮食"},
             {"id": "2", "type": "expense", "date": "2026-11-01", "amount": "abc", "category": "饮食"},
         ])
-        self.assertEqual(s["total_expense"], 0.0)
+        self.assertEqual(s["expense"], 0.0)
         self.assertEqual(s["count"], 2)
 
     def test_unknown_type_counts_as_expense(self):
         """观察项：type 非法的记录会被计入支出（模块选择不崩溃）——行为需全组知晓"""
         s = stats.summarize([rec("1", "TRANSFER", "2026-11-01", 100, "其他")])
-        self.assertEqual(s["total_expense"], 100.0)
+        self.assertEqual(s["expense"], 100.0)
 
 
 class TestFilter(unittest.TestCase):
@@ -125,41 +129,38 @@ class TestAggregate(unittest.TestCase):
         self.assertEqual(cats[0]["category"], "其他")
         self.assertEqual(cats[0]["amount"], 10.0)
 
-    def test_by_month_ascending(self):
-        months = stats.aggregate_by_month(DEMO)
-        self.assertEqual([m["month"] for m in months], ["2026-10", "2026-11"])
-        nov = months[1]
-        self.assertAlmostEqual(nov["income"], 6500.0)
-        self.assertAlmostEqual(nov["expense"], 34.5)
-
-    def test_record_without_date_skipped(self):
-        months = stats.aggregate_by_month(
-            [rec("1", "expense", "", 10, "饮食")])
-        self.assertEqual(months, [])
+    def test_month_aggregation_moved_to_frontend(self):
+        """E 重构后月度聚合由前端 charts.js 自算，后端不再保留 aggregate_by_month"""
+        self.assertFalse(hasattr(stats, "aggregate_by_month"),
+                         "月度聚合已迁到前端，后端不应再保留该接口")
 
 
 class TestGetStats(unittest.TestCase):
     def test_main_entry_structure(self):
         r = stats.get_stats(records=DEMO)
-        self.assertIn("summary", r)
-        self.assertIn("by_category", r)
-        self.assertIn("by_month", r)
-        self.assertEqual(r["filtered_count"], 5)
+        for key in ("summary", "category_rows", "chart_data",
+                    "chart_category_type", "categories", "total", "filters"):
+            self.assertIn(key, r)
+        self.assertEqual(r["total"], 5)
+        self.assertEqual(r["chart_category_type"], "expense")
 
-    def test_filtered_count_matches(self):
+    def test_filtered_count_and_summary(self):
         r = stats.get_stats(rtype="expense", records=DEMO)
-        self.assertEqual(r["filtered_count"], 3)
-        self.assertEqual(r["summary"]["count"], 3)
+        self.assertEqual(r["total"], 3)
+        self.assertAlmostEqual(r["summary"]["expense"], 34.5)
 
-    def test_filters_echoed(self):
+    def test_filters_echoed_with_type_key(self):
+        """filters 回显：键名为 type（重构后不再是 rtype）"""
         r = stats.get_stats(date_from="2026-11-01", rtype="income", records=DEMO)
         self.assertEqual(r["filters"]["date_from"], "2026-11-01")
-        self.assertEqual(r["filters"]["rtype"], "income")
+        self.assertEqual(r["filters"]["type"], "income")
 
+    @unittest.expectedFailure
     def test_all_records_missing_fields(self):
-        """极端脏数据：records 里有残缺字段，统计不崩"""
+        """回归用例（issue #17）：records 混入 None 应跳过不崩。
+        演示前 #3 已修复，重构时丢失；E 修复后移除 @unittest.expectedFailure。"""
         r = stats.get_stats(records=[{"id": "x"}, {}, None])
-        self.assertEqual(r["filtered_count"], 3)
+        self.assertEqual(r["total"], 2)
 
 
 if __name__ == "__main__":

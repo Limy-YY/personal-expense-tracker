@@ -93,3 +93,19 @@ for rec in records:
 | E 修复后 | 复验 BUG-1，关闭 E-07 |
 | 16:25 前 | 全量回归：重跑全部用例 + 集成用例 I-01~05 |
 | 16:45 前 | 向全组报测试结论（全绿 / 剩余 ❌ 清单），作为 release 把关 |
+
+
+---
+
+## 演示后回归（2026-11-07 20:30，针对重构提交 bc3be96 / bdf9d66 / 2523355）
+
+| 模块 | 结果 | 说明 |
+|---|---|---|
+| storage (B) | 26/26 ✅ | 未受重构影响 |
+| query (G) | 26/26 ✅ | 日期移出关键字池的修复已验证 |
+| record_list (D) | 34/34 ✅ | |
+| record_add (C) | 10/10 ✅ | #5 #6 修复保持有效 |
+| category (F) | 26/26 ✅ | 测试已适配新双文件结构 + storage 联动；删除语义=迁移到「其他支出」已验证 |
+| stats (E) | 22 用例中 20 过 | **2 个重构回归，已提 issue**：#17/#18（None 崩溃回归）、#19（summary 未按筛选过滤，高优先级） |
+
+> 注：stats 重构同时把 summarize 契约从 total_income/total_expense 改为 income/expense，filters 键 rtype 改为 type，月度聚合 aggregate_by_month 移除（趋势图由前端 charts.js 自算）——测试文件已同步对齐新契约。
