@@ -27,7 +27,10 @@
 <body>
 
 <div class="form-container">
-    <h2>新增记账</h2>
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h2 style="margin:0;">新增记账</h2>
+        <a href="/records" style="font-size:14px; color:#2563eb; text-decoration:none;">&larr; 返回明细</a>
+    </div>
 
     <!-- Flash 提示信息 -->
     {% with messages = get_flashed_messages(with_categories=true) %}
