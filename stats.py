@@ -48,9 +48,14 @@ def _load_records():
 
 
 def _load_categories():
-    """读取分类列表 [{name,type,color,...}]；供分类表与图表配色。"""
-    data = _load_data()
-    return data.get("categories", []) if isinstance(data, dict) else []
+    """读取分类列表 [{name,type,color,...}]；供分类表与图表配色。
+    联调修正（J）：分类由成员F 的 category.py 统一管理（data/categories.json），
+    改走 F 的 list_categories() 接口，不再从 records.json 里找。"""
+    try:
+        from category import list_categories
+        return list_categories()
+    except Exception:
+        return []
 
 
 def _load_data():

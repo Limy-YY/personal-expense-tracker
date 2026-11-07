@@ -58,15 +58,15 @@
 <section class="stat-grid">
   <article class="card stat-card">
     <span class="stat-label">总收入</span>
-    <strong class="stat-value">¥{{ summary.income | money }}</strong>
+    <strong class="stat-value">{{ summary.income | money }}</strong>
   </article>
   <article class="card stat-card">
     <span class="stat-label">总支出</span>
-    <strong class="stat-value text-expense">¥{{ summary.expense | money }}</strong>
+    <strong class="stat-value text-expense">{{ summary.expense | money }}</strong>
   </article>
   <article class="card stat-card">
     <span class="stat-label">结余</span>
-    <strong class="stat-value {{ 'text-expense' if summary.balance < 0 }}">{{ '-' if summary.balance < 0 }}¥{{ summary.balance | abs | money }}</strong>
+    <strong class="stat-value {{ 'text-expense' if summary.balance < 0 }}">{{ '-' if summary.balance < 0 }}{{ summary.balance | abs | money }}</strong>
   </article>
   <article class="card stat-card">
     <span class="stat-label">笔数</span>
@@ -90,7 +90,7 @@
               {{ row.name }}
             </span>
           </td>
-          <td class="num">¥{{ row.amount | money }}</td>
+          <td class="num">{{ row.amount | money }}</td>
           <td class="num">{{ row.count }}</td>
           <td class="num">{{ row.percent ~ '%' if row.percent is not none else '—' }}</td>
         </tr>
