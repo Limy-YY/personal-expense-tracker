@@ -1,0 +1,24 @@
+{% extends "base.html" %} {% block content %}
+收支统计
+{# ===== 筛选表单：GET 提交到 /stats，由 app.py 调用 stats.get_stats ===== #}
+日期起 
+ 年 /月/日
+ 日期止 
+ 年 /月/日
+ 类别 
+全部类别
+ 类型 
+全部
+ 最小金额 
+ 最大金额 
+ 查询
+{# ===== 汇总卡片：对应 stats.summarize 的返回字段 ===== #}
+总收入 ￥{{ "%.2f"|format(stats.summary.total_income) }}
+总支出 ￥{{ "%.2f"|format(stats.summary.total_expense) }}
+结余 ￥{{ "%.2f"|format(stats.summary.balance) }}
+笔数 {{ stats.summary.count }} 笔
+{# ===== 图表容器：画布由成员I 的 static/js/charts.js 绘制 ===== #}
+支出分类占比
+收入分类
+月度收支趋势
+{# ===== 把统计数据交给 charts.js（成员I 负责绘图，这里只负责注入数据） ===== #} {% endblock %}
