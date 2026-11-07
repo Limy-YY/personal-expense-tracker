@@ -3,7 +3,7 @@
 from flask import Flask, redirect
 
 # 各模块均暴露 bp = Blueprint(...)，路由在各自文件内定义，此处仅统一挂载
-from record_add import bp as record_bp    # 成员C：记账录入
+from record_add import record_add_bp as record_bp    # 成员C：记账录入（J 修正导入名，issue #12）
 from record_list import bp as list_bp     # 成员D：记录查看
 from stats import bp as stats_bp          # 成员E：统计
 from category import bp as category_bp    # 成员F：分类管理
