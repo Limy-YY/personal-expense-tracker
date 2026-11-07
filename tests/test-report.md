@@ -13,6 +13,7 @@
 | stats.py 统计 | E | 22 | 21 | 1 | ⚠️ BUG-1 待修（issue #3） |
 | storage.py 数据存储 | B | 26 | 26 | 0 | ✅ 全组质量标杆：NaN/bool/日期/原子写入/并发锁全防住了 |
 | record_add.py 录入 | C | 10 | 8 | 2 | ⚠️ BUG-2/3 待修（均有兜底，不损坏数据） |
+| ui（H）| H | 静态检查 | — | 1 | ⚠️ 模板契约不一致（issue #8），A 二选一裁决 |
 | record_list.py / query.py | D / G | — | — | — | ⬜ 待合入 |
 | 集成联调 | A | — | — | — | ❌ **缺口：main 缺 storage.py，录入页当前为"假成功"** |
 
