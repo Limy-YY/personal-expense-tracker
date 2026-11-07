@@ -109,6 +109,9 @@ def _load_records():
         raise RuntimeError(f"records.json 读取失败：{e}") from e
     if not isinstance(records, list):
         raise RuntimeError("records.json 顶层不是数组")
+    for i, r in enumerate(records):
+        if not isinstance(r, dict):
+            raise RuntimeError(f"records[{i}] 不是对象")
     return records
 
 
