@@ -94,10 +94,8 @@ class TestRecordAdd(RecordAddTestBase):
         self.post(date="2026-11-7")
         self.assertEqual(self.records(), [])
 
-    @unittest.expectedFailure
     def test_c05_unknown_category_rejected(self):
-        """C-05 回归（issue #21）：新视图层丢失类别存在性校验，脏分类名照存入库。
-        views._read_form 只查非空；A 补上校验后移除此装饰器。"""
+        """C-05 类别存在性校验（issue #21 已修复：_read_form 对接分类列表）"""
         self.post(category="不存在的分类")
         self.assertEqual(self.records(), [])
 

@@ -153,6 +153,8 @@ def _read_form():
         errors["date"] = "请选择日期"
     if not category:
         errors["category"] = "请选择类别"
+    elif category not in {c.get("name") for c in cat_list()}:
+        errors["category"] = "类别不存在，请先在分类管理中添加"
     try:
         amount = float(amount_text)
     except (TypeError, ValueError):
