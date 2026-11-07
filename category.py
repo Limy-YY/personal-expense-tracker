@@ -47,15 +47,15 @@ DEFAULT_CATEGORIES = [
     {"name": "兼职", "type": "income",  "color": "#ec407a", "icon": "💴"},
     {"name": "红包", "type": "income",  "color": "#d4a017", "icon": "🧧"},
     {"name": "其他收入", "type": "income", "color": "#9e9e9e", "icon": "📦"},
-    {"name": "其他", "type": "expense", "color": "#9e9e9e", "budget": 200,  "icon": "📦"},
+    {"name": "其他支出", "type": "expense", "color": "#9e9e9e", "budget": 200,  "icon": "📦"},
 ]
 
 VALID_TYPES = ("expense", "income")  # 校验 type，只能是支出/收入
 HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")  # 校验 6 位十六进制颜色码
 # 分类名禁止出现 URL 路由特殊字符，否则 /api/categories/<name> 匹配不到
 NAME_BAD_CHARS = re.compile(r"[/?#&=]")  # 检查名字里不能包含 / ? # & = 这些字符
-# 兜底分类：受保护不可删除，删除其他分类时历史记录自动迁移到这里
-PROTECTED_CATEGORY = "其他"
+# 兜底分类：受保护不可删除，删除其他分类时历史记录自动迁移到同类型兜底
+PROTECTED_CATEGORY = "其他支出"  # 支出类兜底；收入类兜底是"其他收入"
 
 
 # ============ 数据读写 ============
@@ -374,13 +374,13 @@ if __name__ == "__main__":
         except ValueError as e:
             print("预期报错：", e)
 
-        print("\n=== 测试：删除兜底分类「其他」应报错 ===")
+        print("\n=== 测试：删除兜底分类「其他支出」应报错 ===")
         try:
-            delete_category("其他")
+            delete_category("其他支出")
         except ValueError as e:
             print("预期报错：", e)
 
-        print("\n=== 测试：删除有记录引用的分类，记录自动迁移到「其他」 ===")
+        print("\n=== 测试：删除有记录引用的分类，记录自动迁移到「其他支出」 ===")
         # 手动塞两条引用"宠物"的记录
         records = [
             {"id": "r1", "type": "expense", "date": "2026-11-07", "amount": 100, "category": "宠物", "note": "猫粮"},
