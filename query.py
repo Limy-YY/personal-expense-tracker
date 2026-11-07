@@ -8,23 +8,25 @@ query.py — 筛选与搜索模块（成员G 独立负责）
   3. 排序（日期 / 金额 / id，升序或降序）与分页，供「记录查看」（成员D）直接用；
   4. 输出筛选下拉框的取值（类别 / 账户 / 类型）。
 
-定位：**统一查询入口**。本模块只读，不写任何数据 —— 记录一律从 storage 层取，
-不自行写 data.json；汇总/统计仍由成员E 的 stats.py 负责，两边不重复实现。
+定位：**统一查询入口**。本模块只读，绝不写数据；写入只走成员B 的 storage 层。
+汇总/统计仍由成员E 的 stats.py 负责，两边不重复实现。
 
-数据结构约定（与 category.py / stats.py / storage.py 一致）：
-  data.json -> {
-      "categories": [ {"name": "饮食", "type": "expense", "color": "#ff7043", "budget": 1500}, ... ],
-      "records":    [ {"id": "r1", "type": "expense"|"income", "date": "YYYY-MM-DD",
-                       "amount": 12.5, "category": "饮食", "note": "午餐",
-                       "account": "微信"}, ... ]
-  }
+数据文件（全项目唯一的一份）：
+  data/records.json -> [                      # 顶层是记录数组，不是字典
+      {"id": "r1", "type": "expense"|"income", "date": "YYYY-MM-DD",
+       "amount": 12.5, "category": "饮食", "note": "午餐", "account": "微信"},
+      ...
+  ]
   说明：amount 一律存正数，正负由 type 决定；category 存分类名字符串。
+  兼容：旧版 data.json 的 {"records": [...], "categories": [...]} 结构仍能读（只取 records）。
 
 依赖 storage 层（成员B）已约定的行为（本模块据此假设，不重复实现）：
   load_records() 取全部记录；update_record(id, updates) 为部分更新、id 不允许修改、
   记录不存在返回 None；分类被删除后其下记录 category 自动归入「其他」，且「其他」禁止删除
   —— 因此查询结果里的 category 必然是现存分类，无需特殊兜底。
-  联调前 storage.py 尚未合入时，本模块自动退回直接读 data.json（见 _load_records）。
+  路径上本模块直接沿用 storage.DATA_FILE，读的就是成员B 写的那份文件，不会产生
+  “第二个数据文件”；读侧只做结构级校验（不重复 storage 的字段级校验），
+  这样一条脏记录不会让整页查询失败。
 
 对外接口（给成员A 的 app.py / 成员D 的查看页调用，勿随意改名）：
   query_records(**cond)                     -> list[dict]    组合查询 + 排序
@@ -61,7 +63,14 @@ except ImportError:
     _HAS_STORAGE = False
 
 # ============ 配置 ============
-DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "records.json")   # J 联调修正：对齐统一数据文件（issue #12）
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# 记录文件的唯一路径：默认取 storage 层声明的 DATA_FILE（data/records.json），
+# 保证与成员B 读写的是同一份文件；storage.py 尚未合入时退回同一路径约定。
+DATA_FILE = (
+    str(getattr(storage, "DATA_FILE", os.path.join(_BASE_DIR, "data", "records.json")))
+    if _HAS_STORAGE
+    else os.path.join(_BASE_DIR, "data", "records.json")
+)
 
 TYPE_INCOME = "income"
 TYPE_EXPENSE = "expense"
@@ -76,30 +85,33 @@ _MIN_DATE = _dt.date(1970, 1, 1)     # 日期缺失/非法时的排序占位（�
 # ============ 数据读取 ============
 def _load_records() -> List[Dict[str, Any]]:
     """
-    取全部记录。
-    - storage.py 已合入：走 storage.load_records()（唯一数据出处）
-    - 尚未合入：读 data.json 的 records 兜底，保证单独可测、可跑
+    取全部记录（只读）。
+
+    读的就是 DATA_FILE —— 默认等于 storage.DATA_FILE（data/records.json），
+    和成员B 写入的是同一份文件，不存在“第二个数据文件”的可能。
+    （测试通过重定向 DATA_FILE 指向临时文件，因此这里不再绕过 DATA_FILE 去调 storage。）
+
+    两种结构都认：顶层记录数组（现行），或旧版 {"records": [...], "categories": [...]}。
     文件损坏/结构异常抛 RuntimeError，不静默回退空数组（避免上层把坏文件当没有数据）。
     """
-    if _HAS_STORAGE:
-        return storage.load_records()
-
-    # TODO(联调): 成员B 的 storage.py 合入后，这段兜底读取可删
-    if not os.path.exists(DATA_FILE):
+    path = str(DATA_FILE)
+    if not os.path.exists(path):
         return []                       # 首次启动还没有数据文件
     try:
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
+        with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
     except json.JSONDecodeError as e:
-        raise RuntimeError(f"data.json 已损坏：{e}，请联系存储模块恢复备份") from e
+        raise RuntimeError(f"{os.path.basename(path)} 已损坏：{e}，请联系存储模块恢复备份") from e
     except OSError as e:
-        raise RuntimeError(f"data.json 读取失败：{e}") from e
+        raise RuntimeError(f"{os.path.basename(path)} 读取失败：{e}") from e
 
-    if isinstance(data, list):          # 兼容“只存记录数组”的存储形态
+    if isinstance(data, list):          # 现行结构：顶层就是记录数组
         return data
-    if not isinstance(data, dict) or not isinstance(data.get("records"), list):
-        raise RuntimeError("data.json 结构异常：records 不是数组")
-    return data["records"]
+    if isinstance(data, dict) and isinstance(data.get("records"), list):
+        return data["records"]          # 兼容旧版 {"records": ..., "categories": ...}
+    raise RuntimeError(
+        f"{os.path.basename(path)} 结构异常：既不是记录数组，也没有 records 数组（路径：{path}）"
+    )
 
 
 # ============ 条件标准化 ============
@@ -582,40 +594,39 @@ if __name__ == "__main__":
             print("预期报错：", e)
 
     print("\n=== 分页：金额从高到低，page_size=2 ===")
-    if _HAS_STORAGE:
-        print("storage.py 已在，分页读取真实存储，自测跳过（其余用例已覆盖筛选逻辑）")
-    else:
-        tmp_dir = tempfile.mkdtemp(prefix="query_test_")
-        DATA_FILE = os.path.join(tmp_dir, "data.json")   # 覆盖模块内路径，指向临时文件
-        with open(DATA_FILE, "w", encoding="utf-8") as f:
-            json.dump({"categories": [], "records": demo}, f, ensure_ascii=False)
-        try:
-            p1 = query_page(sort_by="amount", order="desc", page_size=2, page=1)
-            p2 = query_page(sort_by="amount", order="desc", page_size=2, page=2)
-            print("第1页:", [(r["id"], r["amount"]) for r in p1["items"]], "total=", p1["total"],
-                  "pages=", p1["total_pages"], "has_next=", p1["has_next"])
-            print("第2页:", [(r["id"], r["amount"]) for r in p2["items"]], "has_prev=", p2["has_prev"])
-            print("越界页（第 9 页）:", query_page(page=9, page_size=2)["items"])
+    tmp_dir = tempfile.mkdtemp(prefix="query_test_")
+    DATA_FILE = os.path.join(tmp_dir, "records.json")   # 覆盖模块内路径，指向临时文件（绝不碰真实账本）
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        # 与 data/records.json 同一结构：顶层就是记录数组
+        json.dump(demo, f, ensure_ascii=False, indent=2)
+    try:
+        print("当前取数文件：", DATA_FILE)
+        p1 = query_page(sort_by="amount", order="desc", page_size=2, page=1)
+        p2 = query_page(sort_by="amount", order="desc", page_size=2, page=2)
+        print("第1页:", [(r["id"], r["amount"]) for r in p1["items"]], "total=", p1["total"],
+              "pages=", p1["total_pages"], "has_next=", p1["has_next"])
+        print("第2页:", [(r["id"], r["amount"]) for r in p2["items"]], "has_prev=", p2["has_prev"])
+        print("越界页（第 9 页）:", query_page(page=9, page_size=2)["items"])
 
-            print("\n=== 最近 2 条（日期倒序）===")
-            print([(r["id"], r["date"]) for r in latest_records(2)])
+        print("\n=== 最近 2 条（日期倒序）===")
+        print([(r["id"], r["date"]) for r in latest_records(2)])
 
-            print("\n=== 下拉取值 ===")
-            print("category:", distinct_values("category"))
-            print("account :", distinct_values("account"))
-            print("type    :", distinct_values("type"))
+        print("\n=== 下拉取值 ===")
+        print("category:", distinct_values("category"))
+        print("account :", distinct_values("account"))
+        print("type    :", distinct_values("type"))
 
-            print("\n=== 关键字“微信 火锅”（多词且）===")
-            print("命中:", [r["id"] for r in query_records(keyword="微信 火锅")])
+        print("\n=== 关键字“微信 火锅”（多词且）===")
+        print("命中:", [r["id"] for r in query_records(keyword="微信 火锅")])
 
-            print("\n=== 非法条件（应报 400 级错误）===")
-            for bad in ({"start_date": "2026-13-01"}, {"sort_by": "note"},
-                        {"min_amount": 10, "max_amount": 5}, {"foo": 1}):
-                try:
-                    query_records(**bad)
-                except (ValueError, TypeError) as e:
-                    print("预期报错：", e)
-        finally:
-            shutil.rmtree(tmp_dir, ignore_errors=True)
+        print("\n=== 非法条件（应报 400 级错误）===")
+        for bad in ({"start_date": "2026-13-01"}, {"sort_by": "note"},
+                    {"min_amount": 10, "max_amount": 5}, {"foo": 1}):
+            try:
+                query_records(**bad)
+            except (ValueError, TypeError) as e:
+                print("预期报错：", e)
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
     print("\n自测结束。")
