@@ -79,6 +79,22 @@ def _load_data():
         raise RuntimeError("data.json 中 records 不是数组，结构异常")
     if not isinstance(data.get("categories"), list):
         raise RuntimeError("data.json 中 categories 不是数组，结构异常")
+
+    # 元素级校验：分类必须是对象且含必要字段
+    for i, c in enumerate(data["categories"]):
+        if not isinstance(c, dict):
+            raise RuntimeError(f"data.json 中 categories[{i}] 不是对象，结构异常")
+        if not isinstance(c.get("name"), str) or not c.get("name"):
+            raise RuntimeError(f"data.json 中 categories[{i}] 缺少合法 name 字段")
+        if c.get("type") not in VALID_TYPES:
+            raise RuntimeError(f"data.json 中 categories[{i}] 的 type 非法")
+        if not isinstance(c.get("color"), str):
+            raise RuntimeError(f"data.json 中 categories[{i}] 缺少合法 color 字段")
+
+    for i, r in enumerate(data["records"]):
+        if not isinstance(r, dict):
+            raise RuntimeError(f"data.json 中 records[{i}] 不是对象，结构异常")
+
     return data
 
 
@@ -167,6 +183,8 @@ def update_category(old_name, new_name=None, color=None, budget=None, icon=None)
         if not isinstance(new_name, str) or not new_name.strip():
             raise ValueError("新分类名不能为空")
         new_name = new_name.strip()
+        if NAME_BAD_CHARS.search(new_name):
+            raise ValueError("分类名称不能包含 / ? # & = 等特殊字符")
         if new_name != old_name:
             if any(c["name"] == new_name for c in data["categories"]):
                 raise ValueError(f"分类「{new_name}」已存在")
