@@ -34,7 +34,7 @@
 - **复现**：录入页 category 填"不存在的分类"（或前端篡改表单）→ 记账成功，脏分类入库
 - **建议修法**：C 在 POST 校验段调 `category.list_categories()` 取名字集合，`category not in 名字集合` 即 flash 拒绝（GET 已经调了 F 的接口，顺手的事）
 
-### 集成缺口（A 处理，issue #7）：main 上录入页是"假成功"
+### 集成缺口（A 处理，issue #7 —— 已确认：storage 于 PR #9 合入）：main 上录入页是"假成功"
 
 `record_add.py` POST 成功路径 `from storage import add_record`，但 **main 分支还没有 storage.py**（B 的代码在 feature/storage 未合）。当前 main 上提交表单会走 `except ImportError` 分支，显示"[独立测试] 记账成功"——**用户以为记上了，数据实际没存**。B 的模块 26/26 全过、随时可合，建议 A 立即合并 `feature/storage`。
 
