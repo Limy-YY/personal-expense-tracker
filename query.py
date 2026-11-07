@@ -61,7 +61,7 @@ except ImportError:
     _HAS_STORAGE = False
 
 # ============ 配置 ============
-DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data.json")
+DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "records.json")   # J 联调修正：对齐统一数据文件（issue #12）
 
 TYPE_INCOME = "income"
 TYPE_EXPENSE = "expense"

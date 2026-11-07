@@ -10,6 +10,7 @@ from category import bp as category_bp, init_categories    # 成员F：分类管
 
 init_categories()   # 确保 data/categories.json 存在（默认分类），否则类别校验全拒（J 补，issue #12）
 from export import bp as export_bp        # 成员A：数据导出
+from query import bp as query_bp          # 成员G：筛选与搜索
 
 app = Flask(__name__)
 app.secret_key = "ledger-demo-2026"   # flash 消息需要（J 补，issue #12）
@@ -19,6 +20,7 @@ app.register_blueprint(list_bp)
 app.register_blueprint(stats_bp)
 app.register_blueprint(category_bp)
 app.register_blueprint(export_bp)
+app.register_blueprint(query_bp)
 
 # 模板过滤器（E 的契约，H/I 的模板使用 money/type_label）
 app.jinja_env.filters["money"] = money
