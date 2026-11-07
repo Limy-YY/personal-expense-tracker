@@ -1,109 +1,36 @@
-{% extends "base.html" %}
+{% extends "base.html" %} {% block content %}
+收支统计
+按日期、类别、金额区间查看收入、支出与结余
 
-{% block title %}统计{% endblock %}
+{# ===== 筛选表单：GET 提交到 /stats；filters 由后端回传（request.args） ===== #}
 
-{% block content %}
-<div class="page-head">
-  <div>
-    <h1>收支统计</h1>
-    <p class="page-sub">当前条件下共 {{ total }} 笔记录，可按日期、类型和类别筛选。</p>
-  </div>
-  <a class="btn btn-ghost" href="{{ url_for('stats') }}">重置统计</a>
-</div>
-
-<form class="filter-bar card" method="get" action="{{ url_for('stats') }}">
-  <div class="filter-grid">
-    <label>类型
-      <select name="type">
-        <option value="">全部</option>
-        <option value="expense" {{ 'selected' if filters.get('type') == 'expense' }}>支出</option>
-        <option value="income" {{ 'selected' if filters.get('type') == 'income' }}>收入</option>
-      </select>
-    </label>
-
-    <label>类别
-      <select name="category">
-        <option value="">全部</option>
-        {% for category in categories %}
-          <option value="{{ category.name }}" {{ 'selected' if filters.get('category') == category.name }}>{{ category.name }}</option>
-        {% endfor %}
-      </select>
-    </label>
-
-    <label>开始日期
-      <input type="date" name="start" value="{{ filters.get('start', '') }}">
-    </label>
-
-    <label>结束日期
-      <input type="date" name="end" value="{{ filters.get('end', '') }}">
-    </label>
-
-    <label class="filter-keyword">关键字
-      <input type="search" name="q" value="{{ filters.get('q', '') }}" placeholder="备注或类别">
-    </label>
-
-    <div class="filter-actions">
-      <button class="btn btn-primary" type="submit">统计</button>
-      <a class="btn btn-ghost" href="{{ url_for('stats') }}">重置</a>
-    </div>
-  </div>
-</form>
-
-<section class="stats-grid">
-  <article class="stat-card stat-income">
-    <span class="stat-label">总收入</span>
-    <strong class="stat-value">¥{{ summary.income | money }}</strong>
-  </article>
-  <article class="stat-card stat-expense">
-    <span class="stat-label">总支出</span>
-    <strong class="stat-value">¥{{ summary.expense | money }}</strong>
-  </article>
-  <article class="stat-card stat-balance">
-    <span class="stat-label">结余</span>
-    <strong class="stat-value {{ 'text-expense' if summary.balance < 0 }}">
-      {{ '-' if summary.balance < 0 }}¥{{ summary.balance | abs | money }}
-    </strong>
-  </article>
-</section>
-
-<section class="card">
-  <div class="card-head">
-    <h2>分类明细</h2>
-    <span class="muted small">占比按同类型总额计算</span>
-  </div>
-
-  {% if category_rows %}
-    <div class="table-wrap">
-      <table class="table">
-        <thead>
-          <tr>
-            <th>类别</th>
-            <th>类型</th>
-            <th class="num">金额</th>
-            <th class="num">占比</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in category_rows %}
-            <tr>
-              <td>
-                <span class="chip">
-                  <i class="dot" style="background: {{ row.color }}"></i>
-                  {{ row.name }}
-                </span>
-              </td>
-              <td><span class="badge badge-{{ row.type }}">{{ row.type | type_label }}</span></td>
-              <td class="num">¥{{ row.amount | money }}</td>
-              <td class="num">{{ row.percent ~ '%' if row.percent is not none else '—' }}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  {% else %}
-    <div class="empty">
-      <p>当前筛选条件下没有数据。</p>
-    </div>
-  {% endif %}
-</section>
-{% endblock %}
+ 年 /月/日
+ 
+ 年 /月/日
+ 
+全部类别
+ 
+全部类型
+ 
+最小金额
+ 
+最大金额
+查询
+{# ===== 汇总卡片：summary = {income, expense, balance} ===== #}
+总收入
+{{ summary.income | money }}
+总支出
+{{ summary.expense | money }}
+结余
+{{ summary.balance | money }}
+笔数
+{{ total }} 笔
+{# ===== 图表容器：图表由成员I 的 partials/charts.html 绘制 ===== #}
+{{ chart_category_type | type_label }}分类占比
+月度收支趋势
+{# ===== 分类明细：category_rows = {name, color, amount, count, percent} ===== #}
+{% for row in category_rows %} {% else %} {% endfor %}
+类别	金额	笔数	占比
+{{ row.name }}	{{ row.amount | money }}	{{ row.count }}	{{ row.percent }}%
+暂无符合条件的记录
+{% endblock %} {% block scripts %} {# ===== 注入图表数据：chart_data = {records, categories}；类型 chart_category_type ===== #} {% include "partials/charts.html" %} {% endblock %}
