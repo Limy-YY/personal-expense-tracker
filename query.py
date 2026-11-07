@@ -87,16 +87,22 @@ def _load_records() -> List[Dict[str, Any]]:
     """
     取全部记录（只读）。
 
-    读的就是 DATA_FILE —— 默认等于 storage.DATA_FILE（data/records.json），
-    和成员B 写入的是同一份文件，不存在“第二个数据文件”的可能。
-    （测试通过重定向 DATA_FILE 指向临时文件，因此这里不再绕过 DATA_FILE 去调 storage。）
+    正常运行时调用成员B 的 storage.load_records()（唯一数据出处，字段校验也在那一层）；
+    仅当 DATA_FILE 被外部重定向（单元测试注入临时文件）时，才直读 DATA_FILE，
+    这样测试不碰真实账本，生产路径又保持分层。
 
-    两种结构都认：顶层记录数组（现行），或旧版 {"records": [...], "categories": [...]}。
-    文件损坏/结构异常抛 RuntimeError，不静默回退空数组（避免上层把坏文件当没有数据）。
+    直读分支两种结构都认：顶层记录数组（现行），或旧版 {"records": [...], "categories": [...]}。
+    文件损坏/结构异常抛 RuntimeError，不静默回退空数组。
     """
     path = str(DATA_FILE)
+
+    # 正常态：DATA_FILE 就是 storage 声明的那份文件 -> 走存储层
+    if _HAS_STORAGE and os.path.abspath(path) == os.path.abspath(str(storage.DATA_FILE)):
+        return storage.load_records()
+
+    # 测试态：DATA_FILE 被重定向到临时文件 -> 直读（storage 不认这个路径）
     if not os.path.exists(path):
-        return []                       # 首次启动还没有数据文件
+        return []
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -105,10 +111,10 @@ def _load_records() -> List[Dict[str, Any]]:
     except OSError as e:
         raise RuntimeError(f"{os.path.basename(path)} 读取失败：{e}") from e
 
-    if isinstance(data, list):          # 现行结构：顶层就是记录数组
+    if isinstance(data, list):
         return data
     if isinstance(data, dict) and isinstance(data.get("records"), list):
-        return data["records"]          # 兼容旧版 {"records": ..., "categories": ...}
+        return data["records"]
     raise RuntimeError(
         f"{os.path.basename(path)} 结构异常：既不是记录数组，也没有 records 数组（路径：{path}）"
     )
