@@ -10,12 +10,40 @@
 | 模块 | 被测人 | 用例数 | 通过 | 失败 | 结论 |
 |---|---|---|---|---|---|
 | category.py 分类管理 | F | 26 | 26 | 0 | ✅ 质量过硬，可放行 |
-| stats.py 统计 | E | 22 | 21 | 1 | ⚠️ 有 1 个 bug 待修（E-07），其余可放行 |
-| storage.py / record_add / record_list / query | B/C/D/G | — | — | — | ⬜ 待合入 |
+| stats.py 统计 | E | 22 | 21 | 1 | ⚠️ BUG-1 待修（issue #3） |
+| storage.py 数据存储 | B | 26 | 26 | 0 | ✅ 全组质量标杆：NaN/bool/日期/原子写入/并发锁全防住了 |
+| record_add.py 录入 | C | 10 | 8 | 2 | ⚠️ BUG-2/3 待修（均有兜底，不损坏数据） |
+| ui（H）| H | 静态检查 | — | 1 | ⚠️ 模板契约不一致（issue #8），A 二选一裁决 |
+| query.py 筛选搜索 | G | 26 | 26 | 0 | ✅ 标杆级：容错、稳定分页、防误设计全做了 |
+| record_list.py 查看 | D | 34（D 自写） | 34 | 0 | ✅ J 抽查用例质量合格：边界/非法输入/排序覆盖完整 |
+| 集成联调 | A | — | — | — | ❌ **缺口：main 缺 storage.py，录入页当前为"假成功"** |
 
 ## 二、发现的问题
 
-### BUG-1（编号 E-07）：filter_records 遇脏元素崩溃 —— 待 E 修复
+### BUG-2（编号 C-07，issue #5）：NaN 金额绕过 C 的校验，用户看到"系统错误" —— 待 C 修复
+
+- **严重级别**：低（数据不会损坏——B 兜底拒绝了，但报错误导用户）
+- **位置**：`record_add.py` 第 41-48 行金额校验
+- **根因**：`float("nan")` 是合法 float，且 `nan <= 0` 为 False，两个 if 都拦不住
+- **复现**：录入页金额填 `nan` 提交 → 提示"系统错误：数据保存失败"，实际是 B 的 ValueError 被兜底 except 吃掉
+- **建议修法**：金额校验改为 `if not math.isfinite(amount) or amount <= 0:`（需 `import math`），给用户"金额无效"的明确提示
+
+### BUG-3（编号 C-05，issue #6）：类别不校验存在性，脏分类名照存 —— 待 C 修复（或 A 定策略）
+
+- **严重级别**：中（脏数据入库后，统计页按类别聚合会出现孤立类别，饼图错乱）
+- **复现**：录入页 category 填"不存在的分类"（或前端篡改表单）→ 记账成功，脏分类入库
+- **建议修法**：C 在 POST 校验段调 `category.list_categories()` 取名字集合，`category not in 名字集合` 即 flash 拒绝（GET 已经调了 F 的接口，顺手的事）
+
+### 集成缺口（A 处理，issue #7 —— 已确认：storage 于 PR #9 合入）：main 上录入页是"假成功"
+
+`record_add.py` POST 成功路径 `from storage import add_record`，但 **main 分支还没有 storage.py**（B 的代码在 feature/storage 未合）。当前 main 上提交表单会走 `except ImportError` 分支，显示"[独立测试] 记账成功"——**用户以为记上了，数据实际没存**。B 的模块 26/26 全过、随时可合，建议 A 立即合并 `feature/storage`。
+
+### 观察项
+
+1. **前后端日期校验规则不一致**：C 的 strptime 接受 `2026-11-7`（非补零），B 的严格校验拒绝 → 用户看到"系统错误"而非格式提示。建议 C 改用与 B 相同的 `date.fromisoformat` + 往返比较。
+2. **type 非法的记录会被 stats 计入支出**：B/C 校验后正常流程不会产生，行为需全组知晓。
+3. **数据层统一进展（当前最大集成风险）**：F 已重构 category.py 为 `data/categories.json` + `data/records.json`，与 B 的存储层对齐，早期冲突解除。**但 main 上的 stats.py（E）和 query.py（G）仍读根目录 `data.json`**——同一 main 里现存两套读法，A 必须让 E/G 改到 `data/` 目录，否则统计页和搜索页永远查不到新记的账。另外 main 仍缺 storage.py（issue #7）与 app.py。
+4. **stats.py 的 `records` 注入参数与 storage.py 的副本返回设计好评**，模块边界清晰。
 
 - **严重级别**：中（触发条件为数据文件被手动编辑或上游写入异常，但一旦触发整个统计页白屏）
 - **位置**：`stats.py` 第 99 行，`filter_records` 函数的 for 循环内
