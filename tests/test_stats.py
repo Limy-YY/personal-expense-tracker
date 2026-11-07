@@ -147,7 +147,8 @@ class TestGetStats(unittest.TestCase):
     def test_filtered_count_and_summary(self):
         r = stats.get_stats(rtype="expense", records=DEMO)
         self.assertEqual(r["total"], 3)
-        self.assertAlmostEqual(r["summary"]["expense"], 34.5)
+        # DEMO 支出 = 28.5 + 6.0 + 1800.0(房租) = 1834.5（#19 复核：原期望 34.5 漏加房租，系测试误报）
+        self.assertAlmostEqual(r["summary"]["expense"], 1834.5)
 
     def test_filters_echoed_with_type_key(self):
         """filters 回显：键名为 type（重构后不再是 rtype）"""
