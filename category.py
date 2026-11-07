@@ -15,6 +15,7 @@ category.py — 分类管理模块（成员F 独立负责）
 """
 
 import json
+import math
 import os
 import re
 
@@ -30,39 +31,55 @@ DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data.json"
 
 # 默认分类（首次启动自动写入，幂等）
 # budget = 月度预算金额（元），仅支出类设置；收入类不设预算
+# icon = 前端展示图标（emoji），可选
 DEFAULT_CATEGORIES = [
-    {"name": "饮食", "type": "expense", "color": "#ff7043", "budget": 1500},
-    {"name": "交通", "type": "expense", "color": "#42a5f5", "budget": 300},
-    {"name": "购物", "type": "expense", "color": "#ab47bc", "budget": 500},
-    {"name": "娱乐", "type": "expense", "color": "#26a69a", "budget": 300},
-    {"name": "居住", "type": "expense", "color": "#66bb6a", "budget": 2000},
-    {"name": "医疗", "type": "expense", "color": "#ef5350", "budget": 200},
-    {"name": "教育", "type": "expense", "color": "#5c6bc0", "budget": 200},
-    {"name": "工资", "type": "income",  "color": "#ffa726"},
-    {"name": "兼职", "type": "income",  "color": "#ec407a"},
-    {"name": "红包", "type": "income",  "color": "#d4a017"},
-    {"name": "其他", "type": "expense", "color": "#9e9e9e", "budget": 200},
+    {"name": "饮食", "type": "expense", "color": "#ff7043", "budget": 1500, "icon": "🍜"},
+    {"name": "交通", "type": "expense", "color": "#42a5f5", "budget": 300,  "icon": "🚌"},
+    {"name": "购物", "type": "expense", "color": "#ab47bc", "budget": 500,  "icon": "🛍️"},
+    {"name": "娱乐", "type": "expense", "color": "#26a69a", "budget": 300,  "icon": "🎮"},
+    {"name": "居住", "type": "expense", "color": "#66bb6a", "budget": 2000, "icon": "🏠"},
+    {"name": "医疗", "type": "expense", "color": "#ef5350", "budget": 200,  "icon": "💊"},
+    {"name": "教育", "type": "expense", "color": "#5c6bc0", "budget": 200,  "icon": "📚"},
+    {"name": "工资", "type": "income",  "color": "#ffa726", "icon": "💰"},
+    {"name": "兼职", "type": "income",  "color": "#ec407a", "icon": "💴"},
+    {"name": "红包", "type": "income",  "color": "#d4a017", "icon": "🧧"},
+    {"name": "其他", "type": "expense", "color": "#9e9e9e", "budget": 200,  "icon": "📦"},
 ]
 
 VALID_TYPES = ("expense", "income")
 HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+# 分类名禁止出现 URL 路由特殊字符，否则 /api/categories/<name> 匹配不到
+NAME_BAD_CHARS = re.compile(r"[/?#&=]")
 
 
 # ============ 数据读写（联调时改为调用成员B storage.py 的统一接口） ============
 # TODO(联调): 把下面两个函数替换成 from storage import load_data / save_data
 #             其余业务函数不用动，保证模块独立可测。
 def _load_data():
-    """读取整个 data.json；文件不存在或损坏时回退到空结构，避免整站崩。"""
+    """
+    读取整个 data.json。
+    - 文件不存在：返回空结构（首次启动）
+    - JSON 损坏 / 结构不对：抛 RuntimeError，不静默回退空结构，防止上层把坏文件覆盖成空数据。
+      （备份/恢复由成员 B 的 storage 层负责）
+    """
     if not os.path.exists(DATA_FILE):
         return {"records": [], "categories": []}
     try:
         with open(DATA_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
-        data.setdefault("records", [])
-        data.setdefault("categories", [])
-        return data
-    except (json.JSONDecodeError, OSError):
-        return {"records": [], "categories": []}
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"data.json 已损坏：{e}，请联系存储模块恢复备份") from e
+    except OSError as e:
+        raise RuntimeError(f"data.json 读取失败：{e}") from e
+
+    # 顶层结构校验：必须是 dict，且 records/categories 必须是 list
+    if not isinstance(data, dict):
+        raise RuntimeError("data.json 顶层不是对象，结构异常")
+    if not isinstance(data.get("records"), list):
+        raise RuntimeError("data.json 中 records 不是数组，结构异常")
+    if not isinstance(data.get("categories"), list):
+        raise RuntimeError("data.json 中 categories 不是数组，结构异常")
+    return data
 
 
 def _save_data(data):
@@ -92,71 +109,92 @@ def list_categories(c_type=None):
     return cats
 
 
-def _validate(name, c_type, color, budget=None):
+def _validate(name, c_type, color, budget=None, icon=None):
     """表单校验；不合法直接抛 ValueError。"""
-    if not name or not str(name).strip():
-        raise ValueError("分类名称不能为空")
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("分类名称必须是非空字符串")
+    if NAME_BAD_CHARS.search(name):
+        raise ValueError("分类名称不能包含 / ? # & = 等特殊字符")
     if c_type not in VALID_TYPES:
         raise ValueError("type 必须是 expense 或 income")
-    if not HEX_COLOR_RE.match(color or ""):
+    if not isinstance(color, str) or not HEX_COLOR_RE.match(color):
         raise ValueError("color 必须是 #RRGGBB 格式，例如 #ff7043")
-    # 预算校验：仅支出类可设预算，且必须是 >=0 的数字
+    if icon is not None and not isinstance(icon, str):
+        raise ValueError("icon 必须是字符串（emoji）")
+    # 预算校验：仅支出类可设预算，且必须是有限数字
     if budget is not None:
         if c_type != "expense":
             raise ValueError("收入类分类不支持设置预算")
-        if not isinstance(budget, (int, float)) or isinstance(budget, bool) or budget < 0:
+        if isinstance(budget, bool) or not isinstance(budget, (int, float)):
             raise ValueError("budget 必须是不小于 0 的数字（单位：元）")
+        if not math.isfinite(budget) or budget < 0:
+            raise ValueError("budget 必须是不小于 0 的有限数字（不能是 NaN/∞）")
 
 
-def add_category(name, c_type, color, budget=None):
-    """新增分类；重名抛 ValueError。budget 仅支出类可传，单位元。"""
-    name = (name or "").strip()
-    _validate(name, c_type, color, budget)
+def add_category(name, c_type, color, budget=None, icon=None):
+    """新增分类；重名抛 ValueError。budget 仅支出类可传，单位元。icon 可选 emoji。"""
+    if not isinstance(name, str):
+        raise ValueError("分类名称必须是字符串")
+    name = name.strip()
+    _validate(name, c_type, color, budget, icon)
     data = _load_data()
     if any(c["name"] == name for c in data["categories"]):
         raise ValueError(f"分类「{name}」已存在")
     cat = {"name": name, "type": c_type, "color": color}
     if budget is not None:
         cat["budget"] = budget
+    if icon:
+        cat["icon"] = icon
     data["categories"].append(cat)
     _save_data(data)
     return cat
 
 
-def update_category(old_name, new_name, color=None, budget=None):
+def update_category(old_name, new_name=None, color=None, budget=None, icon=None):
     """
-    修改分类：可改名、可改色、可改预算。
-    若改名，会同步把 records 里所有引用 old_name 的记录改成 new_name，避免历史记录丢分类。
-    budget 传 None 表示不修改；传数字则更新月预算（仅支出类）。
+    修改分类：可改名、可改色、可改预算、可改图标。
+    - 参数传 None 表示不修改该字段；
+    - 传空字符串/空值视为非法输入，返回校验错误（与新增规则一致）。
+    若改名，会同步把 records 里所有引用 old_name 的记录改成 new_name。
     """
-    new_name = (new_name or old_name).strip()
     data = _load_data()
     target = next((c for c in data["categories"] if c["name"] == old_name), None)
     if target is None:
         raise ValueError(f"分类「{old_name}」不存在")
 
-    if new_name != old_name:
-        if not new_name:
+    # --- 改名：None=不改；空串=报错 ---
+    if new_name is not None:
+        if not isinstance(new_name, str) or not new_name.strip():
             raise ValueError("新分类名不能为空")
-        if any(c["name"] == new_name for c in data["categories"]):
-            raise ValueError(f"分类「{new_name}」已存在")
-        # 联动 records：把历史记录里的旧分类名替换掉
-        for r in data["records"]:
-            if r.get("category") == old_name:
-                r["category"] = new_name
-        target["name"] = new_name
+        new_name = new_name.strip()
+        if new_name != old_name:
+            if any(c["name"] == new_name for c in data["categories"]):
+                raise ValueError(f"分类「{new_name}」已存在")
+            # 联动 records：把历史记录里的旧分类名替换掉
+            for r in data["records"]:
+                if r.get("category") == old_name:
+                    r["category"] = new_name
+            target["name"] = new_name
 
-    if color:
-        if not HEX_COLOR_RE.match(color):
+    # --- 改色：None=不改；空串=报错 ---
+    if color is not None:
+        if not isinstance(color, str) or not HEX_COLOR_RE.match(color):
             raise ValueError("color 必须是 #RRGGBB 格式")
         target["color"] = color
 
+    # --- 改预算：None=不改；数字=更新（仅支出类） ---
     if budget is not None:
         if target["type"] != "expense":
             raise ValueError("收入类分类不支持设置预算")
-        if not isinstance(budget, (int, float)) or isinstance(budget, bool) or budget < 0:
-            raise ValueError("budget 必须是不小于 0 的数字（单位：元）")
+        if isinstance(budget, bool) or not isinstance(budget, (int, float)) or not math.isfinite(budget) or budget < 0:
+            raise ValueError("budget 必须是不小于 0 的有限数字（单位：元）")
         target["budget"] = budget
+
+    # --- 改图标：None=不改；传字符串=更新 ---
+    if icon is not None:
+        if not isinstance(icon, str):
+            raise ValueError("icon 必须是字符串（emoji）")
+        target["icon"] = icon
 
     _save_data(data)
     return target
@@ -192,11 +230,13 @@ if _HAS_FLASK:
 
     @bp.post("")
     def api_add():
-        body = request.get_json(force=True) or {}
+        body = request.get_json(force=True)
+        if not isinstance(body, dict):
+            return jsonify({"code": 1, "msg": "请求体必须是 JSON 对象"}), 400
         try:
             cat = add_category(
                 body.get("name"), body.get("type"), body.get("color"),
-                body.get("budget"),
+                body.get("budget"), body.get("icon"),
             )
             return jsonify({"code": 0, "data": cat})
         except ValueError as e:
@@ -204,11 +244,14 @@ if _HAS_FLASK:
 
     @bp.put("/<old_name>")
     def api_update(old_name):
-        body = request.get_json(force=True) or {}
+        body = request.get_json(force=True)
+        if not isinstance(body, dict):
+            return jsonify({"code": 1, "msg": "请求体必须是 JSON 对象"}), 400
         try:
             cat = update_category(
-                old_name, body.get("name", old_name),
-                body.get("color"), body.get("budget"),
+                old_name,
+                body.get("name"), body.get("color"),
+                body.get("budget"), body.get("icon"),
             )
             return jsonify({"code": 0, "data": cat})
         except ValueError as e:
@@ -226,34 +269,52 @@ else:
 
 
 # ============ 自测：直接 python category.py 即可跑 ============
+# 使用临时目录，绝不触碰真实 data.json
 if __name__ == "__main__":
-    # 清掉旧数据，保证看到带 budget 的最新默认分类
-    if os.path.exists(DATA_FILE):
-        os.remove(DATA_FILE)
+    import shutil
+    import tempfile
 
-    init_categories()
-    print("=== 默认分类（含预算） ===")
-    for c in list_categories():
-        print(c)
+    tmp_dir = tempfile.mkdtemp(prefix="category_test_")
+    DATA_FILE = os.path.join(tmp_dir, "data.json")
 
-    print("\n=== 测试：新增支出类带预算 ===")
-    print(add_category("宠物", "expense", "#8d6e63", budget=300))
-
-    print("\n=== 测试：修改预算 ===")
-    print(update_category("宠物", "宠物", budget=500))
-
-    print("\n=== 测试：收入类设预算应报错 ===")
     try:
-        add_category("稿费", "income", "#7e57c2", budget=100)
-    except ValueError as e:
-        print("预期报错：", e)
+        init_categories()
+        print("=== 默认分类（含预算/图标） ===")
+        for c in list_categories():
+            print(c)
 
-    print("\n=== 测试：非法预算应报错 ===")
-    try:
-        add_category("测试", "expense", "#999999", budget=-10)
-    except ValueError as e:
-        print("预期报错：", e)
+        print("\n=== 测试：新增支出类带预算和图标 ===")
+        print(add_category("宠物", "expense", "#8d6e63", budget=300, icon="🐱"))
 
-    print("\n=== 清理测试数据 ===")
-    delete_category("宠物")
-    print("剩余分类数：", len(list_categories()))
+        print("\n=== 测试：修改预算和图标 ===")
+        print(update_category("宠物", budget=500, icon="🐶"))
+
+        print("\n=== 测试：收入类设预算应报错 ===")
+        try:
+            add_category("稿费", "income", "#7e57c2", budget=100)
+        except ValueError as e:
+            print("预期报错：", e)
+
+        print("\n=== 测试：NaN/负数预算应报错 ===")
+        try:
+            add_category("测试", "expense", "#999999", budget=float("nan"))
+        except ValueError as e:
+            print("预期报错：", e)
+
+        print("\n=== 测试：分类名带 / 应报错 ===")
+        try:
+            add_category("饮/食", "expense", "#999999")
+        except ValueError as e:
+            print("预期报错：", e)
+
+        print("\n=== 测试：更新传空名称应报错 ===")
+        try:
+            update_category("宠物", new_name="")
+        except ValueError as e:
+            print("预期报错：", e)
+
+        print("\n=== 清理测试数据 ===")
+        delete_category("宠物")
+        print("剩余分类数：", len(list_categories()))
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
